@@ -1,0 +1,162 @@
+{
+ "note": "RAPID 재현 패키지의 입력·결과·사전지정 문서 체크섬.",
+ "algorithm": "sha256",
+ "total_bytes": 35898900,
+ "files": [
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/hier_confirmatory/af2_order_metric.csv",
+   "description": "후속 평가 구조예측 격자",
+   "bytes": 2624068,
+   "sha256": "c6720103c13abe0e1ac8a876865853394ebcbcd744ece4caf5c98f9b10ce21d4"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/hier_confirmatory/candidates.json",
+   "description": "후보 서열과 백본·표적 식별자",
+   "bytes": 4576828,
+   "sha256": "ecc9bc2c35fe95039f7e4a24dd818f42af1ef1843e02651bd25b0c4871a7f97e"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/hier_confirmatory/mpnn_scores.json",
+   "description": "백본 조건부 ProteinMPNN 점수",
+   "bytes": 355938,
+   "sha256": "ec32956e9ff082e1ad231af13aeb2319c8536e65d145d78fd6f4d05bbd7b45be"
+  },
+  {
+   "kind": "입력",
+   "path": "data/benchmark/hier_confirmatory_emb_320d.npz",
+   "description": "ESM-2 8M 임베딩 캐시 (후속 평가)",
+   "bytes": 9150277,
+   "sha256": "668b93a2c471403a0e47005e5d218c6a5038fff57fbefcb014542fc0cf071a85"
+  },
+  {
+   "kind": "입력",
+   "path": "data/benchmark/v2_emb_320d.npz",
+   "description": "ESM-2 임베딩 캐시 (실험 2)",
+   "bytes": 6130513,
+   "sha256": "ef49120f65b767480ff14aec9768b99ced3e72d6b1dde85f47fc21ae7e6c0124"
+  },
+  {
+   "kind": "입력",
+   "path": "data/benchmark/depth_pilot_emb_320d.npz",
+   "description": "ESM-2 임베딩 캐시 (깊이 확장)",
+   "bytes": 4372773,
+   "sha256": "893f02c59678b2bfd997b2e9d74101c2c4a05b43dab212f53b7aa8b6d50873b7"
+  },
+  {
+   "kind": "입력",
+   "path": "data/benchmark/holdout_grid_emb_320d.npz",
+   "description": "ESM-2 임베딩 캐시 (홀드아웃 격자)",
+   "bytes": 1706661,
+   "sha256": "a3710e9f08ab3e26d50fb89337ab6cf91a445665c0f16ffe5474901294c48680"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/v2_multisource/af2_order_metric.csv",
+   "description": "실험 2 구조예측 격자",
+   "bytes": 1763785,
+   "sha256": "37bb6f449ac85851b00a663dbd93690aa295c60c9184c42dd0b3b8aceda81108"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/v2_multisource/candidates.json",
+   "description": "실험 2 후보 서열",
+   "bytes": 3016350,
+   "sha256": "df235c61a95285c5736002fa314acd7daeadee8e594ef9293d2cb925a69626f4"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/depth_pilot/af2_order_metric.csv",
+   "description": "깊이 확장 격자",
+   "bytes": 581908,
+   "sha256": "d79c01832696229ccfb30b387ba484eca97e5d85a5512151dc9d8b08e32eb2bf"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/depth_pilot/candidates_ext.json",
+   "description": "깊이 확장 후보 서열",
+   "bytes": 1088928,
+   "sha256": "eeca75200cae605e8f1963a9bb919c9d9f9a878b9ac679701dd39a63f1fdf2f0"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/v2_mpnn_baseline.json",
+   "description": "실험 2 기준선",
+   "bytes": 91978,
+   "sha256": "d6715db406a7cabc4f9a463549da9ac2a6e7ff1e7b32120008620438380a2ed3"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/hierarchical_replay.json",
+   "description": "초기 배분 평가",
+   "bytes": 31401,
+   "sha256": "d92c7e00e9f89c3b74b09c7a24752fd394607fbdb879d6f526841f0caff20758"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/depth_scaling.json",
+   "description": "깊이 확장",
+   "bytes": 14587,
+   "sha256": "56ba4611c236a45c7b30a1a047def3715c4ed063c8bd662e38bd4798b9342b24"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/selection_gain_decomposition.json",
+   "description": "선택 이득 분해",
+   "bytes": 19652,
+   "sha256": "4e28c39ea4ff55ab7a1e3a8e1c311539c351cdf58fa99dca552456a5d8bb01c2"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/coverage_preserving.json",
+   "description": "EFBC 분산도",
+   "bytes": 110494,
+   "sha256": "7c3c6bee061b289ac07371471f11f3afa5725087f9fda73374c5a9e5bfbd883a"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/structural_dispersion.json",
+   "description": "구조 분산 진단",
+   "bytes": 99100,
+   "sha256": "6a6737d1dc1bfd2207cc7e8ec0c21eb88fef8705df62d22f0246fcd7fa2f70d0"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/hierarchical_confirmatory.json",
+   "description": "후속 평가 주 분석",
+   "bytes": 74939,
+   "sha256": "19d35cd87a33b06cb0a7ce79a8e4f26775fc14e15acfc8252e48cb056f629cb6"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/stop_rule_diagnosis.json",
+   "description": "종료 규칙 진단",
+   "bytes": 52787,
+   "sha256": "f7d5c82e5c0b174f6d4b11ebe351d5f4de01745a55e2aacc5ba1e8d252e12cd5"
+  },
+  {
+   "kind": "사전지정",
+   "path": "docs/specs/hierarchical-confirmatory-prespec.md",
+   "description": "후속 평가 계획",
+   "bytes": 15128,
+   "sha256": "b63edd1f93d10db05e0cea1f8481d61cffdd3a7cd168cf787b20db22cb73d569"
+  },
+  {
+   "kind": "사전지정",
+   "path": "docs/specs/hierarchical-replay-prespec.md",
+   "description": "초기 배분 평가 계획",
+   "bytes": 10795,
+   "sha256": "22b63f2878d61cf2a68def4611af2c54ec0d519f14bab0cc68efa2a567b2bcd2"
+  },
+  {
+   "kind": "사전지정",
+   "path": "docs/specs/coverage-preserving-prespec.md",
+   "description": "EFBC 분석 계획",
+   "bytes": 10010,
+   "sha256": "47788f2a8043a722d9039c9e2f51cd35f2963f375db015692914cb27e8d04101"
+  }
+ ],
+ "missing": []
+}

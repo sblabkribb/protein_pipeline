@@ -26,6 +26,7 @@ import csv
 import hashlib
 import importlib.util
 import json
+import os
 import math
 import statistics
 import sys
@@ -51,6 +52,15 @@ DENOM_MIN = 5.0
 ARMS = ("equal_random", "rf_only", "greedy_fill", "greedy_thompson", "oracle")
 
 
+def _esm_url_default() -> str:
+    """ESM_EMBEDDING_URL 이 없으면 빈 문자열. 호출자가 --esm-url 로 준다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 그대로 나간다. 임베딩
+    캐시가 있으면 이 값은 쓰이지 않는다.
+    """
+    return os.environ.get("ESM_EMBEDDING_URL", "").strip()
+
+
 def _mod(p, n):
     s = importlib.util.spec_from_file_location(n, HERE / p)
     m = importlib.util.module_from_spec(s)
@@ -60,9 +70,15 @@ def _mod(p, n):
 
 # ------------------------------------------------------------------ 입력
 
-def load(esm_url: str):
+def load(esm_url: str, v2_cohort=None, pilot_cohort=None):
     """기존 18 개(v2) + 신규 24 개(파일럿) 를 한 표로 합친다."""
     m33 = _mod("33_v2_mpnn_baseline.py", "m33")
+    global PILOT
+    if v2_cohort is not None:
+        m33.V2 = Path(v2_cohort)
+        m33.MPNN_CACHE = m33.V2 / "mpnn_scores_v2.json"
+    if pilot_cohort is not None:
+        PILOT = Path(pilot_cohort)
     rows = [r for r in m33.load_rows()
             if r["cohort"] == "confirmatory" and r["source"] == "rfd3"]
     key = {c["sequence_id"]: c["backbone_key"]
@@ -203,11 +219,13 @@ def replay(y, X, bb_of, B, seed, depth, fit_rank):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--esm-url", default="http://211.188.35.221:18170")
+    ap.add_argument("--esm-url", default=_esm_url_default())
+    ap.add_argument("--v2-cohort", default=None)
+    ap.add_argument("--pilot-cohort", default=None)
     ap.add_argument("--out", default=str(BASE / "depth_scaling.json"))
     a = ap.parse_args(argv)
 
-    rows, emb = load(a.esm_url)
+    rows, emb = load(a.esm_url, a.v2_cohort, a.pilot_cohort)
     fit_rank = _mod("31_fewshot_jointpass_transfer.py", "m31").fit_rank
     by_unit = collections.defaultdict(list)
     for i, r in enumerate(rows):

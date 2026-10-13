@@ -87,9 +87,15 @@ def _mod(path, name):
 
 # ------------------------------------------------------------------ 입력
 
-def load(esm_url: str):
+def load(esm_url: str, cohort=None):
     """`33_` 의 로더를 그대로 쓴다 - 행 순서가 같아야 임베딩 캐시가 맞는다."""
     m33 = _mod("33_v2_mpnn_baseline.py", "m33")
+    if cohort is not None:
+        #: 격자를 바꿔 끼울 때 `33_` 의 전역 경로도 함께 옮긴다.
+        m33.V2 = Path(cohort)
+        m33.MPNN_CACHE = m33.V2 / "mpnn_scores_v2.json"
+        global V2
+        V2 = m33.V2
     rows = m33.load_rows()
     key = {c["sequence_id"]: c["backbone_key"]
            for c in json.loads((V2 / "candidates.json").read_text(encoding="utf-8"))}
@@ -294,11 +300,13 @@ def run_source(rows, emb, mpnn, source):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--cohort", default=None,
+                    help="격자 디렉터리. 주지 않으면 동결된 코호트를 쓴다.")
     ap.add_argument("--esm-url", default="")
     ap.add_argument("--out", default=str(OUT_DIR / "hierarchical_replay.json"))
     args = ap.parse_args(argv)
 
-    rows, emb, mpnn = load(args.esm_url)
+    rows, emb, mpnn = load(args.esm_url, args.cohort)
     print(f"후보 {len(rows)} · 백본 {len({r['backbone_key'] for r in rows})}", flush=True)
 
     out = {"purpose": ("백본 배분과 서열 순위화의 결합 이득을 같은 예산에서 "

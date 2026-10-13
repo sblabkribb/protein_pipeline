@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 from pathlib import Path
 
 import matplotlib
@@ -36,7 +37,9 @@ import numpy as np
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
 ROOT = Path(__file__).resolve().parents[2]
-G = ROOT / "public_data" / "benchmark" / "gate0"
+#: 결과 디렉터리를 바꿔 끼울 수 있게 한다. 기본값은 저장소의 동결 경로다.
+G = Path(os.environ.get("RAPID_GATE0", "")) if os.environ.get("RAPID_GATE0") \
+    else ROOT / "public_data" / "benchmark" / "gate0"
 RES = ROOT / "public_data" / "benchmark" / "results"
 FIG = ROOT / "figures" / "submission"
 FIG.mkdir(parents=True, exist_ok=True)
@@ -96,11 +99,11 @@ def arrow(ax, a, b, color="#6b7c8c"):
 
 def fig1_workflow():
     fig, ax = plt.subplots(figsize=(8.0, 3.14))
-    ax.set_xlim(0, 10.2); ax.set_ylim(0, 4.0); ax.axis("off")
+    ax.set_xlim(0, 10.2); ax.set_ylim(-0.42, 4.0); ax.axis("off")
     top = [("1. Constraints", "MSA conservation\nmotif / fixed sites"),
            ("2. Backbone", "native + RFD3 / BioEmu"),
            ("3. Sequences", "ProteinMPNN\nbulk generation"),
-           ("4. Cheap filter", "SoluProt\nsolubility-oriented")]
+           ("4. Solubility score", "SoluProt\npre-filter optional")]
     bot = [("7. Portfolio", "joint-pass + diversity\n-> wet-lab"),
            ("6. Verification", "AF2 / ColabFold\npLDDT + RMSD"),
            ("5. Triage", "MPNN NLL or\ntarget-specific surrogate")]
@@ -122,9 +125,12 @@ def fig1_workflow():
     ax.text(0.15, 3.82, "RAPID is a workflow, not a single model: it links the design "
             "stages and allocates a fixed structure-prediction budget.",
             fontsize=9.5, fontweight="bold", color="#1b2a38")
-    ax.text(0.15, 0.28, "The computational endpoint is not solubility itself but the "
+    ax.text(0.15, 0.56, va="top", s="The computational endpoint is not solubility itself but the "
             "efficient recovery of candidates that pass both the\n"
-            "solubility-oriented and the structure-preservation conditions.",
+            "solubility-oriented and the structure-preservation conditions. In the "
+            "benchmark comparisons SoluProt was not applied as a\n"
+            "pre-filter: every selection rule ranked the same candidate pool, and "
+            "SoluProt entered only in the joint-pass decision (step 7).",
             fontsize=8.2, color="#5a6b7a")
     save(fig, "fig1_workflow")
 
@@ -353,7 +359,8 @@ def fig5_depth():
     h = [plt.Line2D([], [], color=BLUE, lw=1.6, marker="o", ms=5, label="D increases with depth"),
          plt.Line2D([], [], color=ORANGE, lw=1.6, marker="o", ms=5, label="D decreases with depth")]
     axes[1].legend(handles=h, loc="upper right", fontsize=8, frameon=False)
-    fig.suptitle("Depth-extension pilot · RFD3 confirmatory\nB=80 · 5 eligible units",
+    fig.suptitle("Depth-extension pilot · RFD3 confirmatory\n"
+            f"B=80 · {len(c['per_unit_delta'])} eligible units",
                  fontsize=9.6, fontweight="bold", y=1.04)
     fig.tight_layout()
     save(fig, "fig5_depth_scaling")

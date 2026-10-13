@@ -139,6 +139,19 @@ manuscript (5).md
 # 원격 사본은 S3 에 있다 (public_data/benchmark/reward_embeddings_archive.json).
 /meta_surrogate_prototype/*.npz
 
+# 원고 분석의 ESM-2 8M 임베딩 캐시(합계 약 20MB)는 추적한다. /data/ 가 통째로
+# 무시되지만, 이 네 파일이 없으면 외부에서 분석을 재실행할 때 임베딩 서버가
+# 필요해져 재현이 네트워크에 의존한다. gate2d_esm_8m_tokens.npz(425MB)는
+# 이름 규칙이 달라 여기에 걸리지 않으며 계속 무시된다.
+!/data/
+/data/*
+!/data/benchmark/
+/data/benchmark/*
+!/data/benchmark/*_emb_320d.npz
+
+# 살베지 백업본. 원본 격자와 중복이고 내부 주소가 남아 있다.
+*.bak-salvage
+
 # 분석용 venv (statsmodels). 시스템 파이썬이 PEP 668 로 막혀 있어 별도로 둔다.
 /.venv-analysis/
 
@@ -147,3 +160,6 @@ manuscript (5).md
 
 # 재생성 전 로컬 백업 (이력은 git 에 있다)
 *.bak-before-*
+
+# SoluProt 교체 전 격자·결과. 이력 보존용이며 배포 대상이 아니다.
+*heuristic-soluprot*

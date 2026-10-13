@@ -39,6 +39,7 @@ import csv
 import hashlib
 import importlib.util
 import json
+import os
 import statistics
 import sys
 from pathlib import Path
@@ -58,6 +59,15 @@ BUDGETS, PRIMARY_B = (40, 60, 80, 100), 80
 SEEDS = [42, 123, 7, 2024, 31337]
 N_BOOTSTRAP, BOOT_SEED = 2000, 20260921
 ARMS = ("unif_rand", "rf_rand", "unif_rf", "rf_rf")
+
+
+def _esm_url_default() -> str:
+    """ESM_EMBEDDING_URL 이 없으면 빈 문자열. 호출자가 --esm-url 로 준다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 그대로 나간다. 임베딩
+    캐시가 있으면 이 값은 쓰이지 않는다.
+    """
+    return os.environ.get("ESM_EMBEDDING_URL", "").strip()
 
 
 def _mod(p, n):
@@ -244,7 +254,7 @@ def main(argv=None) -> int:
     ap.add_argument("--cohort", default=str(BASE / "hier_confirmatory"),
                     help="격자 디렉터리 (candidates.json + af2_order_metric.csv)")
     ap.add_argument("--label", default="hier_confirmatory_34")
-    ap.add_argument("--esm-url", default="http://211.188.35.221:18170")
+    ap.add_argument("--esm-url", default=_esm_url_default())
     ap.add_argument("--out", default=str(BASE / "selection_gain_decomposition.json"))
     a = ap.parse_args(argv)
 

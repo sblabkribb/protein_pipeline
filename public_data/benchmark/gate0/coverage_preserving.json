@@ -344,140 +344,140 @@
    "1a6jA00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.9722222222222222,
+    "joint_rate": 0.8571428571428571,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.980630003122577,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.991414095392848,
-       "joint": 41.0,
+       "efbc": 5.898311835100063,
+       "joint": 36.0,
        "struct": 42.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.395200941407297,
-       "joint": 41.2,
+       "efbc": 4.307661063364512,
+       "joint": 36.4,
        "struct": 42.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.974865386598314,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.786522789514356,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.980630003122577,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.994535274317065,
-       "joint": 81.8,
+       "efbc": 5.951340078937866,
+       "joint": 72.2,
        "struct": 84.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.9817078146189337,
-       "joint": 81.8,
+       "efbc": 3.576136819355797,
+       "joint": 75.4,
        "struct": 84.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.974865386598314,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.786522789514356,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.980630003122577,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.995242059567739,
-       "joint": 122.8,
+       "efbc": 5.943927798158051,
+       "joint": 107.8,
        "struct": 126.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.353616635411327,
-       "joint": 123.8,
+       "efbc": 4.00963212863887,
+       "joint": 112.8,
        "struct": 126.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.974865386598314,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.786522789514356,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.980630003122577,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.996251096678337,
-       "joint": 163.8,
+       "efbc": 5.946849633636606,
+       "joint": 144.8,
        "struct": 168.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.9370336200826435,
-       "joint": 165.2,
+       "efbc": 4.569412517772558,
+       "joint": 149.8,
        "struct": 168.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.974865386598314,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 24.6,
+       "efbc": 5.786522789514356,
+       "joint": 22.2,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -487,29 +487,29 @@
    "1a8rG01": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.9166666666666666,
+    "joint_rate": 0.9126984126984127,
     "by_budget": {
      "42": {
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 28.0,
+       "struct": 24.2,
+       "calls": 28.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.874115469921535,
-       "joint": 38.6,
+       "efbc": 5.872270191541333,
+       "joint": 38.4,
        "struct": 38.6,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.1442714949649675,
-       "joint": 39.0,
-       "struct": 39.0,
+       "efbc": 4.289534982003663,
+       "joint": 38.6,
+       "struct": 39.2,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
@@ -517,8 +517,8 @@
       "static_equal_matched": {
        "efbc": 5.717410376632021,
        "joint": 25.2,
-       "struct": 25.2,
-       "calls": 28.0,
+       "struct": 25.4,
+       "calls": 28.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -527,23 +527,23 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 28.0,
+       "struct": 24.2,
+       "calls": 28.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.833305040712544,
-       "joint": 76.4,
+       "efbc": 5.833941140763414,
+       "joint": 76.0,
        "struct": 76.4,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.4983776071984387,
+       "efbc": 3.5381719766164146,
        "joint": 80.6,
-       "struct": 80.6,
+       "struct": 81.2,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
@@ -551,8 +551,8 @@
       "static_equal_matched": {
        "efbc": 5.717410376632021,
        "joint": 25.2,
-       "struct": 25.2,
-       "calls": 28.0,
+       "struct": 25.4,
+       "calls": 28.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -561,23 +561,23 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 28.0,
+       "struct": 24.2,
+       "calls": 28.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.822789565641948,
-       "joint": 113.8,
+       "efbc": 5.82379312676447,
+       "joint": 113.2,
        "struct": 113.8,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.9564760423567233,
+       "efbc": 3.9922994800795872,
        "joint": 122.6,
-       "struct": 122.6,
+       "struct": 123.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
@@ -585,8 +585,8 @@
       "static_equal_matched": {
        "efbc": 5.717410376632021,
        "joint": 25.2,
-       "struct": 25.2,
-       "calls": 28.0,
+       "struct": 25.4,
+       "calls": 28.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -595,23 +595,23 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 28.0,
+       "struct": 24.2,
+       "calls": 28.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.862539463780627,
-       "joint": 153.2,
+       "efbc": 5.863486843339096,
+       "joint": 152.6,
        "struct": 153.2,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.575163213119682,
+       "efbc": 4.540560403403021,
        "joint": 164.4,
-       "struct": 164.4,
+       "struct": 165.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
@@ -619,8 +619,8 @@
       "static_equal_matched": {
        "efbc": 5.717410376632021,
        "joint": 25.2,
-       "struct": 25.2,
-       "calls": 28.0,
+       "struct": 25.4,
+       "calls": 28.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -630,36 +630,36 @@
    "1advA01": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.23809523809523808,
+    "joint_rate": 0.2222222222222222,
     "by_budget": {
      "42": {
       "coverage_v2": {
        "efbc": 2.916867221028826,
        "joint": 6.6,
-       "struct": 6.6,
+       "struct": 6.8,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.2
       },
       "static_equal": {
-       "efbc": 2.4549302785102065,
-       "joint": 10.4,
+       "efbc": 2.4103212920408326,
+       "joint": 10.0,
        "struct": 10.4,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 2.8
       },
       "greedy_fill": {
-       "efbc": 1.8130910359203163,
-       "joint": 18.0,
+       "efbc": 1.7770320179230772,
+       "joint": 17.8,
        "struct": 18.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 2.8
       },
       "static_equal_matched": {
-       "efbc": 2.4549302785102065,
-       "joint": 10.4,
+       "efbc": 2.4103212920408326,
+       "joint": 10.0,
        "struct": 10.4,
        "calls": 42.0,
        "stopped": 0.0,
@@ -668,32 +668,32 @@
      },
      "84": {
       "coverage_v2": {
-       "efbc": 3.3797106843427276,
-       "joint": 7.8,
-       "struct": 7.8,
+       "efbc": 3.321665627198497,
+       "joint": 7.4,
+       "struct": 8.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.6
       },
       "static_equal": {
-       "efbc": 2.6552694817816453,
-       "joint": 19.0,
+       "efbc": 2.6052718691677743,
+       "joint": 18.6,
        "struct": 19.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.6
       },
       "greedy_fill": {
-       "efbc": 1.905103324846381,
-       "joint": 39.8,
-       "struct": 39.8,
+       "efbc": 1.8471879203138524,
+       "joint": 39.4,
+       "struct": 39.6,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 2.8
       },
       "static_equal_matched": {
-       "efbc": 2.6552694817816453,
-       "joint": 19.0,
+       "efbc": 2.6052718691677743,
+       "joint": 18.6,
        "struct": 19.0,
        "calls": 84.0,
        "stopped": 0.0,
@@ -702,32 +702,32 @@
      },
      "126": {
       "coverage_v2": {
-       "efbc": 4.177752037011827,
-       "joint": 9.2,
-       "struct": 9.2,
+       "efbc": 4.009069456545588,
+       "joint": 8.8,
+       "struct": 9.8,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 4.6
+       "n_backbones_hit": 4.4
       },
       "static_equal": {
-       "efbc": 2.807091525260786,
-       "joint": 30.2,
+       "efbc": 2.564747200992521,
+       "joint": 28.0,
        "struct": 30.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.6
       },
       "greedy_fill": {
-       "efbc": 2.285783866102314,
-       "joint": 52.4,
-       "struct": 52.4,
+       "efbc": 2.2074654011440673,
+       "joint": 51.4,
+       "struct": 52.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.2
       },
       "static_equal_matched": {
-       "efbc": 2.807091525260786,
-       "joint": 30.2,
+       "efbc": 2.564747200992521,
+       "joint": 28.0,
        "struct": 30.2,
        "calls": 126.0,
        "stopped": 0.0,
@@ -736,34 +736,34 @@
      },
      "168": {
       "coverage_v2": {
-       "efbc": 4.529117729014004,
-       "joint": 9.6,
-       "struct": 9.6,
-       "calls": 149.0,
-       "stopped": 1.0,
-       "n_backbones_hit": 5.0
+       "efbc": 4.350614696583496,
+       "joint": 9.4,
+       "struct": 10.6,
+       "calls": 154.0,
+       "stopped": 0.8,
+       "n_backbones_hit": 4.8
       },
       "static_equal": {
-       "efbc": 2.8617236476200736,
-       "joint": 39.4,
+       "efbc": 2.6235944673363516,
+       "joint": 36.8,
        "struct": 39.4,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.0
       },
       "greedy_fill": {
-       "efbc": 2.7504141111167315,
-       "joint": 58.0,
-       "struct": 58.0,
+       "efbc": 2.468902242290094,
+       "joint": 53.8,
+       "struct": 57.4,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.6
       },
       "static_equal_matched": {
-       "efbc": 2.848763682287498,
-       "joint": 35.2,
-       "struct": 35.2,
-       "calls": 149.0,
+       "efbc": 2.584927580570654,
+       "joint": 34.0,
+       "struct": 36.4,
+       "calls": 154.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.8
       }
@@ -1202,36 +1202,36 @@
    "1b5aA00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.44047619047619047,
+    "joint_rate": 0.3888888888888889,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 4.420879437252002,
-       "joint": 12.8,
-       "struct": 13.0,
+       "efbc": 4.432990137821299,
+       "joint": 11.0,
+       "struct": 12.8,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 3.4532848831748404,
-       "joint": 18.8,
+       "efbc": 3.4901902940798064,
+       "joint": 16.2,
        "struct": 19.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.0
       },
       "greedy_fill": {
-       "efbc": 2.3383343281436515,
-       "joint": 28.6,
-       "struct": 29.2,
+       "efbc": 2.409072561907477,
+       "joint": 23.6,
+       "struct": 28.4,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.0
       },
       "static_equal_matched": {
-       "efbc": 3.4532848831748404,
-       "joint": 18.8,
+       "efbc": 3.4901902940798064,
+       "joint": 16.2,
        "struct": 19.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -1240,32 +1240,32 @@
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.319173340895324,
-       "joint": 14.6,
-       "struct": 14.8,
+       "efbc": 5.455321913770383,
+       "joint": 13.2,
+       "struct": 15.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 3.7148086633678585,
-       "joint": 37.2,
+       "efbc": 3.834455430865164,
+       "joint": 32.2,
        "struct": 37.6,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.2
       },
       "greedy_fill": {
-       "efbc": 2.419308548708462,
-       "joint": 68.0,
-       "struct": 69.0,
+       "efbc": 2.4821303354044084,
+       "joint": 57.0,
+       "struct": 67.8,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.0
       },
       "static_equal_matched": {
-       "efbc": 3.7148086633678585,
-       "joint": 37.2,
+       "efbc": 3.834455430865164,
+       "joint": 32.2,
        "struct": 37.6,
        "calls": 84.0,
        "stopped": 0.0,
@@ -1274,70 +1274,70 @@
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.559459897465721,
-       "joint": 16.6,
+       "efbc": 5.646299044615799,
+       "joint": 15.0,
        "struct": 16.8,
-       "calls": 120.0,
+       "calls": 117.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 3.702820669371993,
-       "joint": 54.8,
+       "efbc": 3.8340646210595075,
+       "joint": 47.4,
        "struct": 55.4,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.6
       },
       "greedy_fill": {
-       "efbc": 2.964523944772508,
-       "joint": 96.6,
-       "struct": 97.6,
+       "efbc": 3.001269464514257,
+       "joint": 84.2,
+       "struct": 97.4,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.0
       },
       "static_equal_matched": {
-       "efbc": 3.6337972966317214,
-       "joint": 52.0,
-       "struct": 52.6,
-       "calls": 120.0,
+       "efbc": 3.6692487296772214,
+       "joint": 44.0,
+       "struct": 51.6,
+       "calls": 117.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.4
+       "n_backbones_hit": 5.2
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.559459897465721,
-       "joint": 16.6,
+       "efbc": 5.646299044615799,
+       "joint": 15.0,
        "struct": 16.8,
-       "calls": 120.0,
+       "calls": 117.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 3.7650497835029384,
-       "joint": 73.6,
+       "efbc": 3.8744203221759914,
+       "joint": 65.0,
        "struct": 74.2,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.8
       },
       "greedy_fill": {
-       "efbc": 3.2235081246208033,
-       "joint": 103.6,
-       "struct": 104.6,
+       "efbc": 3.2928899834130294,
+       "joint": 90.8,
+       "struct": 104.8,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       },
       "static_equal_matched": {
-       "efbc": 3.6337972966317214,
-       "joint": 52.0,
-       "struct": 52.6,
-       "calls": 120.0,
+       "efbc": 3.6692487296772214,
+       "joint": 44.0,
+       "struct": 51.6,
+       "calls": 117.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.4
+       "n_backbones_hit": 5.2
       }
      }
     }
@@ -1345,142 +1345,142 @@
    "1b7eA01": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.75,
+    "joint_rate": 0.42063492063492064,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.961260006245157,
-       "joint": 20.4,
-       "struct": 20.4,
-       "calls": 31.2,
-       "stopped": 1.0,
+       "efbc": 5.908783703998801,
+       "joint": 13.8,
+       "struct": 23.8,
+       "calls": 32.6,
+       "stopped": 0.8,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.629951102561428,
-       "joint": 29.8,
+       "efbc": 5.449080733367978,
+       "joint": 17.2,
        "struct": 29.8,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "greedy_fill": {
-       "efbc": 3.7790431217010916,
-       "joint": 33.4,
-       "struct": 33.4,
+       "efbc": 3.649927519890587,
+       "joint": 16.0,
+       "struct": 30.6,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.571934772631625,
-       "joint": 22.2,
-       "struct": 22.2,
-       "calls": 31.2,
+       "efbc": 5.064663570140938,
+       "joint": 12.6,
+       "struct": 23.2,
+       "calls": 32.6,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.4
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.961260006245157,
-       "joint": 20.4,
-       "struct": 20.4,
-       "calls": 31.2,
+       "efbc": 5.943862019094172,
+       "joint": 14.0,
+       "struct": 24.2,
+       "calls": 33.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.737457986995616,
-       "joint": 62.2,
+       "efbc": 5.711532759993769,
+       "joint": 36.2,
        "struct": 62.2,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.2743100792071367,
-       "joint": 69.4,
-       "struct": 69.4,
+       "efbc": 3.154519049420679,
+       "joint": 35.0,
+       "struct": 64.6,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.571934772631625,
-       "joint": 22.2,
-       "struct": 22.2,
-       "calls": 31.2,
+       "efbc": 5.065937785049558,
+       "joint": 12.8,
+       "struct": 23.6,
+       "calls": 33.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.4
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.961260006245157,
-       "joint": 20.4,
-       "struct": 20.4,
-       "calls": 31.2,
+       "efbc": 5.943862019094172,
+       "joint": 14.0,
+       "struct": 24.2,
+       "calls": 33.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.811019565100667,
-       "joint": 94.2,
+       "efbc": 5.8302237864,
+       "joint": 53.0,
        "struct": 94.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.817054305777652,
-       "joint": 104.8,
-       "struct": 104.8,
+       "efbc": 3.5413280431628142,
+       "joint": 54.6,
+       "struct": 97.0,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.571934772631625,
-       "joint": 22.2,
-       "struct": 22.2,
-       "calls": 31.2,
+       "efbc": 5.065937785049558,
+       "joint": 12.8,
+       "struct": 23.6,
+       "calls": 33.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.4
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.961260006245157,
-       "joint": 20.4,
-       "struct": 20.4,
-       "calls": 31.2,
+       "efbc": 5.943862019094172,
+       "joint": 14.0,
+       "struct": 24.2,
+       "calls": 33.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.814336278858576,
-       "joint": 125.2,
+       "efbc": 5.7924050420588005,
+       "joint": 70.6,
        "struct": 125.2,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.411148321598867,
-       "joint": 137.4,
-       "struct": 137.4,
+       "efbc": 4.255566201166879,
+       "joint": 74.6,
+       "struct": 133.8,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.571934772631625,
-       "joint": 22.2,
-       "struct": 22.2,
-       "calls": 31.2,
+       "efbc": 5.065937785049558,
+       "joint": 12.8,
+       "struct": 23.6,
+       "calls": 33.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.4
       }
      }
     }
@@ -1774,36 +1774,36 @@
    "1bt2A00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.6071428571428571,
+    "joint_rate": 0.5476190476190477,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 4.726062159511964,
-       "joint": 15.6,
-       "struct": 15.6,
+       "efbc": 4.735643611494986,
+       "joint": 14.2,
+       "struct": 16.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 4.572413841072548,
-       "joint": 26.2,
+       "efbc": 4.543263756548162,
+       "joint": 24.0,
        "struct": 26.2,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       },
       "greedy_fill": {
-       "efbc": 2.9544412004283775,
-       "joint": 32.6,
-       "struct": 32.6,
+       "efbc": 3.0019954966379263,
+       "joint": 28.8,
+       "struct": 32.4,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.572413841072548,
-       "joint": 26.2,
+       "efbc": 4.543263756548162,
+       "joint": 24.0,
        "struct": 26.2,
        "calls": 42.0,
        "stopped": 0.0,
@@ -1812,102 +1812,102 @@
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.000000000000001,
-       "joint": 20.0,
-       "struct": 20.0,
-       "calls": 77.2,
-       "stopped": 1.0,
+       "efbc": 4.986792567451408,
+       "joint": 18.0,
+       "struct": 20.2,
+       "calls": 75.6,
+       "stopped": 0.8,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 4.529956608861987,
-       "joint": 51.2,
+       "efbc": 4.511558487470969,
+       "joint": 45.8,
        "struct": 51.2,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       },
       "greedy_fill": {
-       "efbc": 2.7498894864570502,
-       "joint": 74.4,
-       "struct": 74.4,
+       "efbc": 2.6578999762248996,
+       "joint": 66.8,
+       "struct": 73.6,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.49140199186213,
-       "joint": 47.2,
-       "struct": 47.2,
-       "calls": 77.2,
+       "efbc": 4.4855023077981935,
+       "joint": 41.8,
+       "struct": 46.4,
+       "calls": 75.6,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.000000000000001,
-       "joint": 20.0,
-       "struct": 20.0,
-       "calls": 77.2,
+       "efbc": 4.9926451830422405,
+       "joint": 18.2,
+       "struct": 20.4,
+       "calls": 75.8,
        "stopped": 1.0,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 4.56917240446862,
-       "joint": 77.0,
+       "efbc": 4.5429808032730055,
+       "joint": 69.4,
        "struct": 77.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       },
       "greedy_fill": {
-       "efbc": 3.3004477854093635,
-       "joint": 110.4,
-       "struct": 110.4,
+       "efbc": 3.247832734046766,
+       "joint": 99.2,
+       "struct": 110.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.49140199186213,
-       "joint": 47.2,
-       "struct": 47.2,
-       "calls": 77.2,
+       "efbc": 4.483779505654099,
+       "joint": 42.0,
+       "struct": 46.6,
+       "calls": 75.8,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.000000000000001,
-       "joint": 20.0,
-       "struct": 20.0,
-       "calls": 77.2,
+       "efbc": 4.9926451830422405,
+       "joint": 18.2,
+       "struct": 20.4,
+       "calls": 75.8,
        "stopped": 1.0,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 4.600960009629038,
-       "joint": 102.0,
+       "efbc": 4.580794888450776,
+       "joint": 92.2,
        "struct": 102.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       },
       "greedy_fill": {
-       "efbc": 4.011295152282126,
-       "joint": 137.8,
-       "struct": 137.8,
+       "efbc": 4.03547381584968,
+       "joint": 124.6,
+       "struct": 137.6,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       },
       "static_equal_matched": {
-       "efbc": 4.49140199186213,
-       "joint": 47.2,
-       "struct": 47.2,
-       "calls": 77.2,
+       "efbc": 4.483779505654099,
+       "joint": 42.0,
+       "struct": 46.6,
+       "calls": 75.8,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       }
@@ -1917,140 +1917,140 @@
    "1bxmA00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.5158730158730159,
+    "joint_rate": 0.623015873015873,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.90271386766449,
-       "joint": 17.8,
-       "struct": 31.6,
-       "calls": 36.2,
-       "stopped": 0.6,
+       "efbc": 5.942764191750074,
+       "joint": 20.4,
+       "struct": 28.8,
+       "calls": 33.2,
+       "stopped": 0.8,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.536866362180406,
-       "joint": 20.8,
+       "efbc": 5.685570714691191,
+       "joint": 25.8,
        "struct": 38.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.0779501144344,
-       "joint": 21.8,
-       "struct": 38.8,
+       "efbc": 3.571317230616983,
+       "joint": 30.8,
+       "struct": 39.4,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.489526357097104,
-       "joint": 18.0,
-       "struct": 32.4,
-       "calls": 36.2,
+       "efbc": 5.5980814881919425,
+       "joint": 20.4,
+       "struct": 30.2,
+       "calls": 33.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.961141822392882,
-       "joint": 19.0,
-       "struct": 33.4,
-       "calls": 38.2,
+       "efbc": 5.957433280410582,
+       "joint": 20.6,
+       "struct": 29.0,
+       "calls": 33.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.7923466708099065,
-       "joint": 41.2,
+       "efbc": 5.711057641594903,
+       "joint": 51.2,
        "struct": 76.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.3205268658687235,
-       "joint": 44.6,
-       "struct": 79.2,
+       "efbc": 3.2401362464002297,
+       "joint": 61.4,
+       "struct": 81.0,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.566718930331689,
-       "joint": 18.6,
-       "struct": 34.2,
-       "calls": 38.2,
+       "efbc": 5.599527644005078,
+       "joint": 20.6,
+       "struct": 30.4,
+       "calls": 33.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.961141822392882,
-       "joint": 19.0,
-       "struct": 33.4,
-       "calls": 38.2,
+       "efbc": 5.957433280410582,
+       "joint": 20.6,
+       "struct": 29.0,
+       "calls": 33.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.861002631016401,
-       "joint": 65.6,
+       "efbc": 5.724685906399338,
+       "joint": 78.8,
        "struct": 114.4,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.7179412194050796,
-       "joint": 69.4,
-       "struct": 119.0,
+       "efbc": 3.716363543523301,
+       "joint": 91.2,
+       "struct": 122.0,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.566718930331689,
-       "joint": 18.6,
-       "struct": 34.2,
-       "calls": 38.2,
+       "efbc": 5.599527644005078,
+       "joint": 20.6,
+       "struct": 30.4,
+       "calls": 33.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.961141822392882,
-       "joint": 19.0,
-       "struct": 33.4,
-       "calls": 38.2,
+       "efbc": 5.957433280410582,
+       "joint": 20.6,
+       "struct": 29.0,
+       "calls": 33.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.8669524366533405,
-       "joint": 86.6,
+       "efbc": 5.748379297397699,
+       "joint": 105.8,
        "struct": 150.6,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.402892266491513,
-       "joint": 92.0,
-       "struct": 158.2,
+       "efbc": 4.436364410021192,
+       "joint": 116.6,
+       "struct": 161.2,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.6
+       "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.566718930331689,
-       "joint": 18.6,
-       "struct": 34.2,
-       "calls": 38.2,
+       "efbc": 5.599527644005078,
+       "joint": 20.6,
+       "struct": 30.4,
+       "calls": 33.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -2203,36 +2203,36 @@
    "1hufA00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.373015873015873,
+    "joint_rate": 0.38095238095238093,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.728516807382622,
+       "efbc": 5.512300609754967,
        "joint": 10.8,
-       "struct": 11.2,
+       "struct": 11.0,
        "calls": 40.6,
        "stopped": 0.2,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "static_equal": {
-       "efbc": 4.84069390072454,
-       "joint": 15.0,
+       "efbc": 4.756596943329479,
+       "joint": 15.2,
        "struct": 15.6,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.2
       },
       "greedy_fill": {
-       "efbc": 3.3461626793593475,
-       "joint": 17.4,
-       "struct": 18.6,
+       "efbc": 3.0755483984961103,
+       "joint": 18.8,
+       "struct": 19.6,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.643415317114858,
-       "joint": 14.6,
+       "efbc": 4.559318359719796,
+       "joint": 14.8,
        "struct": 15.2,
        "calls": 40.6,
        "stopped": 0.0,
@@ -2241,102 +2241,102 @@
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.901840235277234,
-       "joint": 11.8,
-       "struct": 12.2,
-       "calls": 49.4,
+       "efbc": 5.897738276062204,
+       "joint": 12.6,
+       "struct": 12.8,
+       "calls": 54.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 4.96130197827808,
-       "joint": 31.0,
+       "efbc": 4.895848433266273,
+       "joint": 31.4,
        "struct": 32.4,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.6
       },
       "greedy_fill": {
-       "efbc": 2.898248091158605,
-       "joint": 39.2,
-       "struct": 42.8,
+       "efbc": 2.681902796562145,
+       "joint": 42.0,
+       "struct": 44.2,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.633627778285077,
-       "joint": 17.6,
-       "struct": 18.4,
-       "calls": 49.4,
+       "efbc": 4.567784691852418,
+       "joint": 18.4,
+       "struct": 19.2,
+       "calls": 54.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.901840235277234,
-       "joint": 11.8,
-       "struct": 12.2,
-       "calls": 49.4,
+       "efbc": 5.897738276062204,
+       "joint": 12.6,
+       "struct": 12.8,
+       "calls": 54.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.161531239744855,
-       "joint": 44.6,
+       "efbc": 5.046518101609656,
+       "joint": 45.8,
        "struct": 48.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.4158675510255905,
-       "joint": 58.8,
-       "struct": 64.2,
+       "efbc": 3.3522216719134375,
+       "joint": 62.6,
+       "struct": 65.6,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.633627778285077,
-       "joint": 17.6,
-       "struct": 18.4,
-       "calls": 49.4,
+       "efbc": 4.567784691852418,
+       "joint": 18.4,
+       "struct": 19.2,
+       "calls": 54.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.901840235277234,
-       "joint": 11.8,
-       "struct": 12.2,
-       "calls": 49.4,
+       "efbc": 5.897738276062204,
+       "joint": 12.6,
+       "struct": 12.8,
+       "calls": 54.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.184402701126783,
-       "joint": 60.0,
+       "efbc": 5.08217298759506,
+       "joint": 61.6,
        "struct": 64.8,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.033947504637823,
-       "joint": 76.8,
-       "struct": 82.8,
+       "efbc": 3.9541320132485094,
+       "joint": 78.8,
+       "struct": 82.6,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 4.633627778285077,
-       "joint": 17.6,
-       "struct": 18.4,
-       "calls": 49.4,
+       "efbc": 4.567784691852418,
+       "joint": 18.4,
+       "struct": 19.2,
+       "calls": 54.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.0
       }
@@ -2632,142 +2632,142 @@
    "1keeF01": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.8650793650793651,
+    "joint_rate": 0.6626984126984127,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.987944302902713,
-       "joint": 23.6,
-       "struct": 23.6,
-       "calls": 39.8,
-       "stopped": 0.4,
+       "efbc": 5.7199234938465695,
+       "joint": 18.6,
+       "struct": 25.6,
+       "calls": 41.8,
+       "stopped": 0.2,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.388305500533533,
-       "joint": 36.0,
+       "efbc": 5.07292828573435,
+       "joint": 29.0,
        "struct": 36.0,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.2
       },
       "greedy_fill": {
-       "efbc": 3.669198750886997,
-       "joint": 38.4,
+       "efbc": 3.557482827901318,
+       "joint": 30.4,
        "struct": 38.4,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.4
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.356906254071003,
-       "joint": 34.0,
-       "struct": 34.0,
-       "calls": 39.8,
+       "efbc": 5.066024082423026,
+       "joint": 28.8,
+       "struct": 35.8,
+       "calls": 41.8,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.2
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 41.6,
+       "efbc": 5.972858367601154,
+       "joint": 21.2,
+       "struct": 28.8,
+       "calls": 52.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.4714270328914525,
-       "joint": 72.4,
+       "efbc": 5.303244556365403,
+       "joint": 58.2,
        "struct": 72.4,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.23545297568331,
-       "joint": 80.4,
+       "efbc": 3.200418973407196,
+       "joint": 64.8,
        "struct": 80.4,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.4
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.342667296858617,
+       "efbc": 5.05243743715808,
        "joint": 35.4,
-       "struct": 35.4,
-       "calls": 41.6,
+       "struct": 44.8,
+       "calls": 52.6,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.2
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 41.6,
+       "efbc": 5.972858367601154,
+       "joint": 21.2,
+       "struct": 28.8,
+       "calls": 52.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.506540031988858,
-       "joint": 109.0,
+       "efbc": 5.274066378213055,
+       "joint": 85.2,
        "struct": 109.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.7362791713004677,
-       "joint": 122.4,
+       "efbc": 3.6323091210908505,
+       "joint": 98.0,
        "struct": 122.4,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.4
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.342667296858617,
+       "efbc": 5.05243743715808,
        "joint": 35.4,
-       "struct": 35.4,
-       "calls": 41.6,
+       "struct": 44.8,
+       "calls": 52.6,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.2
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 41.6,
+       "efbc": 5.972858367601154,
+       "joint": 21.2,
+       "struct": 28.8,
+       "calls": 52.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.494027440831262,
-       "joint": 145.0,
+       "efbc": 5.301791414396442,
+       "joint": 112.2,
        "struct": 145.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.369715326312133,
-       "joint": 164.4,
+       "efbc": 4.2381406711363985,
+       "joint": 130.0,
        "struct": 164.4,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 5.4
+       "n_backbones_hit": 5.2
       },
       "static_equal_matched": {
-       "efbc": 5.342667296858617,
+       "efbc": 5.05243743715808,
        "joint": 35.4,
-       "struct": 35.4,
-       "calls": 41.6,
+       "struct": 44.8,
+       "calls": 52.6,
        "stopped": 0.0,
-       "n_backbones_hit": 5.8
+       "n_backbones_hit": 5.2
       }
      }
     }
@@ -2775,142 +2775,142 @@
    "1lshB00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.9325396825396826,
+    "joint_rate": 0.5912698412698413,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 26.8,
+       "efbc": 5.961141822392882,
+       "joint": 19.0,
+       "struct": 32.0,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.93550136288885,
-       "joint": 37.2,
+       "efbc": 5.595184977756751,
+       "joint": 21.2,
        "struct": 38.2,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.316278078999255,
-       "joint": 38.6,
-       "struct": 39.2,
+       "efbc": 3.811877535494249,
+       "joint": 22.0,
+       "struct": 38.2,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "static_equal_matched": {
-       "efbc": 5.82941789731894,
-       "joint": 23.8,
-       "struct": 24.4,
-       "calls": 26.8,
+       "efbc": 5.443115934759954,
+       "joint": 17.6,
+       "struct": 31.8,
+       "calls": 34.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 26.8,
+       "efbc": 5.961141822392882,
+       "joint": 19.0,
+       "struct": 32.0,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.982187353553818,
-       "joint": 76.4,
+       "efbc": 5.851417170869981,
+       "joint": 44.4,
        "struct": 78.6,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.7561293564824094,
-       "joint": 78.6,
-       "struct": 80.0,
+       "efbc": 3.152989293828963,
+       "joint": 48.6,
+       "struct": 78.6,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "static_equal_matched": {
-       "efbc": 5.82941789731894,
-       "joint": 23.8,
-       "struct": 24.4,
-       "calls": 26.8,
+       "efbc": 5.443115934759954,
+       "joint": 17.6,
+       "struct": 31.8,
+       "calls": 34.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 26.8,
+       "efbc": 5.961141822392882,
+       "joint": 19.0,
+       "struct": 32.0,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.9907533198988325,
-       "joint": 115.8,
+       "efbc": 5.949450609929063,
+       "joint": 70.4,
        "struct": 118.6,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.074365476741095,
-       "joint": 116.6,
-       "struct": 119.2,
+       "efbc": 3.784052468739764,
+       "joint": 72.6,
+       "struct": 119.0,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "static_equal_matched": {
-       "efbc": 5.82941789731894,
-       "joint": 23.8,
-       "struct": 24.4,
-       "calls": 26.8,
+       "efbc": 5.443115934759954,
+       "joint": 17.6,
+       "struct": 31.8,
+       "calls": 34.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.6,
-       "calls": 26.8,
+       "efbc": 5.961141822392882,
+       "joint": 19.0,
+       "struct": 32.0,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.992151749451037,
-       "joint": 155.6,
+       "efbc": 5.954779505118576,
+       "joint": 97.0,
        "struct": 159.2,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.566943255206734,
-       "joint": 156.6,
-       "struct": 159.6,
+       "efbc": 4.458370698671434,
+       "joint": 97.0,
+       "struct": 158.8,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "static_equal_matched": {
-       "efbc": 5.82941789731894,
-       "joint": 23.8,
-       "struct": 24.4,
-       "calls": 26.8,
+       "efbc": 5.443115934759954,
+       "joint": 17.6,
+       "struct": 31.8,
+       "calls": 34.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      }
     }
@@ -2918,38 +2918,38 @@
    "1mjoD00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.6706349206349206,
+    "joint_rate": 0.6507936507936508,
     "by_budget": {
      "42": {
       "coverage_v2": {
        "efbc": 5.957433280410583,
        "joint": 20.6,
-       "struct": 20.6,
-       "calls": 33.8,
-       "stopped": 1.0,
+       "struct": 21.2,
+       "calls": 34.6,
+       "stopped": 0.8,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.590180061146298,
-       "joint": 28.4,
+       "efbc": 5.542114241191907,
+       "joint": 27.6,
        "struct": 28.4,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.8702136515146677,
-       "joint": 32.0,
-       "struct": 32.0,
+       "efbc": 3.753001302892088,
+       "joint": 31.6,
+       "struct": 32.2,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.528277325224653,
-       "joint": 23.2,
-       "struct": 23.2,
-       "calls": 33.8,
+       "efbc": 5.458024499637482,
+       "joint": 22.8,
+       "struct": 23.6,
+       "calls": 34.6,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -2958,32 +2958,32 @@
       "coverage_v2": {
        "efbc": 5.957433280410583,
        "joint": 20.6,
-       "struct": 20.6,
-       "calls": 33.8,
+       "struct": 21.2,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.593465677785133,
-       "joint": 56.8,
+       "efbc": 5.585922174861967,
+       "joint": 55.6,
        "struct": 56.8,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.175460214886391,
-       "joint": 67.6,
-       "struct": 67.6,
+       "efbc": 3.103114758655158,
+       "joint": 65.8,
+       "struct": 67.2,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.528277325224653,
-       "joint": 23.2,
-       "struct": 23.2,
-       "calls": 33.8,
+       "efbc": 5.458024499637482,
+       "joint": 22.8,
+       "struct": 23.6,
+       "calls": 34.6,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -2992,32 +2992,32 @@
       "coverage_v2": {
        "efbc": 5.957433280410583,
        "joint": 20.6,
-       "struct": 20.6,
-       "calls": 33.8,
+       "struct": 21.2,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.632103289985914,
-       "joint": 84.0,
+       "efbc": 5.612589391218415,
+       "joint": 82.0,
        "struct": 84.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.7207348211842435,
-       "joint": 100.0,
-       "struct": 100.0,
+       "efbc": 3.6430494875419583,
+       "joint": 98.0,
+       "struct": 100.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.528277325224653,
-       "joint": 23.2,
-       "struct": 23.2,
-       "calls": 33.8,
+       "efbc": 5.458024499637482,
+       "joint": 22.8,
+       "struct": 23.6,
+       "calls": 34.6,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3026,32 +3026,32 @@
       "coverage_v2": {
        "efbc": 5.957433280410583,
        "joint": 20.6,
-       "struct": 20.6,
-       "calls": 33.8,
+       "struct": 21.2,
+       "calls": 34.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.701620197233676,
-       "joint": 112.8,
+       "efbc": 5.664271917145378,
+       "joint": 109.6,
        "struct": 112.8,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.397330200764595,
-       "joint": 130.0,
-       "struct": 130.0,
+       "efbc": 4.3435332537969265,
+       "joint": 128.0,
+       "struct": 130.4,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.528277325224653,
-       "joint": 23.2,
-       "struct": 23.2,
-       "calls": 33.8,
+       "efbc": 5.458024499637482,
+       "joint": 22.8,
+       "struct": 23.6,
+       "calls": 34.6,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3204,38 +3204,38 @@
    "1qmbB00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 1.0,
+    "joint_rate": 0.9880952380952381,
     "by_budget": {
      "42": {
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999999999999998,
-       "joint": 42.0,
+       "efbc": 5.994464164859392,
+       "joint": 41.4,
        "struct": 42.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.299126965268136,
-       "joint": 42.0,
+       "efbc": 4.256958419268589,
+       "joint": 41.6,
        "struct": 42.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
+       "efbc": 5.974865386598314,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3244,32 +3244,32 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999999999999998,
-       "joint": 84.0,
+       "efbc": 5.99627276859057,
+       "joint": 82.6,
        "struct": 84.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.6308524981233026,
-       "joint": 84.0,
+       "efbc": 3.598222672908091,
+       "joint": 83.6,
        "struct": 84.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
+       "efbc": 5.974865386598314,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3278,32 +3278,32 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999999999999998,
-       "joint": 126.0,
+       "efbc": 5.998019686721628,
+       "joint": 124.0,
        "struct": 126.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.066022409556283,
-       "joint": 126.0,
+       "efbc": 4.03789994320956,
+       "joint": 125.6,
        "struct": 126.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
+       "efbc": 5.974865386598314,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3312,32 +3312,32 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999999999999998,
-       "joint": 168.0,
+       "efbc": 5.9982471530155586,
+       "joint": 165.4,
        "struct": 168.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.66939515930526,
-       "joint": 168.0,
+       "efbc": 4.643510220139959,
+       "joint": 167.6,
        "struct": 168.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
+       "efbc": 5.974865386598314,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 24.4,
+       "calls": 24.4,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3347,142 +3347,142 @@
    "1r7lA00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.9047619047619048,
+    "joint_rate": 0.40476190476190477,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 26.6,
-       "calls": 27.8,
-       "stopped": 1.0,
-       "n_backbones_hit": 6.0
+       "efbc": 5.013390607989736,
+       "joint": 12.2,
+       "struct": 38.4,
+       "calls": 42.0,
+       "stopped": 0.0,
+       "n_backbones_hit": 5.4
       },
       "static_equal": {
-       "efbc": 5.8916245662586055,
-       "joint": 37.8,
+       "efbc": 4.664388257097086,
+       "joint": 16.8,
        "struct": 40.4,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.0
       },
       "greedy_fill": {
-       "efbc": 4.00430602187972,
-       "joint": 39.4,
-       "struct": 40.8,
+       "efbc": 3.3794596205332885,
+       "joint": 18.6,
+       "struct": 40.2,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 5.833512913092002,
-       "joint": 24.8,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 4.664388257097086,
+       "joint": 16.8,
+       "struct": 40.4,
+       "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.0
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 5.619879689386243,
+       "joint": 13.8,
+       "struct": 61.0,
+       "calls": 68.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.920560183701769,
-       "joint": 75.6,
+       "efbc": 4.96205433180974,
+       "joint": 32.6,
        "struct": 80.4,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.4
       },
       "greedy_fill": {
-       "efbc": 3.4111805986458847,
-       "joint": 81.4,
-       "struct": 82.8,
+       "efbc": 3.0071398415843693,
+       "joint": 39.4,
+       "struct": 82.2,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 5.833512913092002,
-       "joint": 24.8,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 5.005807267636694,
+       "joint": 27.2,
+       "struct": 65.0,
+       "calls": 68.2,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.4
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 5.619879689386243,
+       "joint": 13.8,
+       "struct": 61.0,
+       "calls": 68.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.935979723428647,
-       "joint": 113.8,
+       "efbc": 5.055224135431617,
+       "joint": 49.8,
        "struct": 120.4,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.6
       },
       "greedy_fill": {
-       "efbc": 3.877648270978618,
-       "joint": 123.4,
-       "struct": 124.8,
+       "efbc": 3.4060223711617423,
+       "joint": 59.2,
+       "struct": 123.2,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 5.833512913092002,
-       "joint": 24.8,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 5.005807267636694,
+       "joint": 27.2,
+       "struct": 65.0,
+       "calls": 68.2,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.4
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 5.619879689386243,
+       "joint": 13.8,
+       "struct": 61.0,
+       "calls": 68.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.942435648854432,
-       "joint": 151.4,
+       "efbc": 5.10736548314387,
+       "joint": 65.4,
        "struct": 160.4,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       },
       "greedy_fill": {
-       "efbc": 4.625086874997593,
-       "joint": 161.8,
-       "struct": 163.8,
+       "efbc": 4.089001889142917,
+       "joint": 80.0,
+       "struct": 164.8,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 4.6
       },
       "static_equal_matched": {
-       "efbc": 5.833512913092002,
-       "joint": 24.8,
-       "struct": 26.6,
-       "calls": 27.8,
+       "efbc": 5.005807267636694,
+       "joint": 27.2,
+       "struct": 65.0,
+       "calls": 68.2,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.4
       }
      }
     }
@@ -3490,7 +3490,7 @@
    "1szwB02": {
     "n_backbones": 1,
     "pool": 42,
-    "joint_rate": 0.30952380952380953,
+    "joint_rate": 0.2857142857142857,
     "by_budget": {
      "42": {
       "coverage_v2": {
@@ -3503,7 +3503,7 @@
       },
       "static_equal": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3511,7 +3511,7 @@
       },
       "greedy_fill": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3537,7 +3537,7 @@
       },
       "static_equal": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3545,7 +3545,7 @@
       },
       "greedy_fill": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3571,7 +3571,7 @@
       },
       "static_equal": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3579,7 +3579,7 @@
       },
       "greedy_fill": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3605,7 +3605,7 @@
       },
       "static_equal": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3613,7 +3613,7 @@
       },
       "greedy_fill": {
        "efbc": 1.0,
-       "joint": 13.0,
+       "joint": 12.0,
        "struct": 13.0,
        "calls": 42.0,
        "stopped": 0.0,
@@ -3633,38 +3633,38 @@
    "2vvrB00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.996031746031746,
+    "joint_rate": 0.876984126984127,
     "by_budget": {
      "42": {
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.998154721619796,
-       "joint": 41.8,
+       "efbc": 5.935403432776785,
+       "joint": 37.0,
        "struct": 41.8,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.60798928282746,
-       "joint": 41.2,
+       "efbc": 4.244964047434854,
+       "joint": 38.2,
        "struct": 41.2,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.846487022549674,
+       "joint": 23.8,
+       "struct": 27.0,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3673,32 +3673,32 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999557379690688,
-       "joint": 83.8,
+       "efbc": 5.950546472385414,
+       "joint": 74.2,
        "struct": 83.8,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.8648736041752416,
-       "joint": 83.0,
-       "struct": 83.0,
+       "efbc": 3.5616897506063765,
+       "joint": 79.0,
+       "struct": 83.2,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.846487022549674,
+       "joint": 23.8,
+       "struct": 27.0,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3707,32 +3707,32 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999417770911674,
-       "joint": 125.4,
+       "efbc": 5.947694760802255,
+       "joint": 109.8,
        "struct": 125.4,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.290025241944039,
-       "joint": 125.0,
-       "struct": 125.0,
+       "efbc": 3.9633601185536382,
+       "joint": 118.2,
+       "struct": 125.2,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.846487022549674,
+       "joint": 23.8,
+       "struct": 27.0,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3741,32 +3741,32 @@
       "coverage_v2": {
        "efbc": 5.999999999999998,
        "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "struct": 27.2,
+       "calls": 27.2,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999566252102785,
-       "joint": 167.2,
+       "efbc": 5.957427993768654,
+       "joint": 147.8,
        "struct": 167.2,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.911779709347221,
-       "joint": 167.0,
+       "efbc": 4.69546675678626,
+       "joint": 154.0,
        "struct": 167.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.846487022549674,
+       "joint": 23.8,
+       "struct": 27.0,
+       "calls": 27.2,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -3919,140 +3919,140 @@
    "2x62B00": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.6111111111111112,
+    "joint_rate": 0.5238095238095238,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.949543736034426,
-       "joint": 18.0,
-       "struct": 18.0,
-       "calls": 31.2,
+       "efbc": 5.953370736866542,
+       "joint": 15.2,
+       "struct": 17.4,
+       "calls": 29.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.6387497057673865,
-       "joint": 24.2,
+       "efbc": 5.680350712249757,
+       "joint": 20.4,
        "struct": 24.2,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.394813613755063,
-       "joint": 31.4,
-       "struct": 31.4,
+       "efbc": 4.093735332237068,
+       "joint": 22.0,
+       "struct": 26.4,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.659684513187814,
-       "joint": 17.2,
-       "struct": 17.2,
-       "calls": 31.2,
+       "efbc": 5.647878948614981,
+       "joint": 14.2,
+       "struct": 16.2,
+       "calls": 29.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.949543736034426,
-       "joint": 18.0,
-       "struct": 18.0,
-       "calls": 31.2,
+       "efbc": 5.953370736866542,
+       "joint": 15.2,
+       "struct": 17.4,
+       "calls": 29.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.728354188384991,
-       "joint": 49.8,
+       "efbc": 5.748427073403964,
+       "joint": 43.4,
        "struct": 49.8,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 2.924018552447467,
-       "joint": 62.2,
-       "struct": 62.2,
+       "efbc": 3.1895933106439998,
+       "joint": 46.2,
+       "struct": 55.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.659684513187814,
-       "joint": 17.2,
-       "struct": 17.2,
-       "calls": 31.2,
+       "efbc": 5.647878948614981,
+       "joint": 14.2,
+       "struct": 16.2,
+       "calls": 29.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.949543736034426,
-       "joint": 18.0,
-       "struct": 18.0,
-       "calls": 31.2,
+       "efbc": 5.953370736866542,
+       "joint": 15.2,
+       "struct": 17.4,
+       "calls": 29.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.78651491727042,
-       "joint": 76.4,
+       "efbc": 5.817047497274835,
+       "joint": 66.2,
        "struct": 76.4,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.6006254484564675,
-       "joint": 84.8,
-       "struct": 84.8,
+       "efbc": 3.6990915664926476,
+       "joint": 72.4,
+       "struct": 82.6,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.659684513187814,
-       "joint": 17.2,
-       "struct": 17.2,
-       "calls": 31.2,
+       "efbc": 5.647878948614981,
+       "joint": 14.2,
+       "struct": 16.2,
+       "calls": 29.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.949543736034426,
-       "joint": 18.0,
-       "struct": 18.0,
-       "calls": 31.2,
+       "efbc": 5.953370736866542,
+       "joint": 15.2,
+       "struct": 17.4,
+       "calls": 29.0,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.769694511585463,
-       "joint": 100.6,
+       "efbc": 5.807289839536296,
+       "joint": 86.8,
        "struct": 100.6,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.308025438779436,
-       "joint": 108.6,
-       "struct": 108.6,
+       "efbc": 4.513927203133842,
+       "joint": 95.4,
+       "struct": 107.6,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "static_equal_matched": {
-       "efbc": 5.659684513187814,
-       "joint": 17.2,
-       "struct": 17.2,
-       "calls": 31.2,
+       "efbc": 5.647878948614981,
+       "joint": 14.2,
+       "struct": 16.2,
+       "calls": 29.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       }
@@ -4062,142 +4062,142 @@
    "3ab2G02": {
     "n_backbones": 6,
     "pool": 248,
-    "joint_rate": 0.04032258064516129,
+    "joint_rate": 0.024193548387096774,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 1.4,
-       "joint": 1.4,
+       "efbc": 1.0,
+       "joint": 1.0,
        "struct": 1.4,
        "calls": 38.4,
        "stopped": 0.2,
-       "n_backbones_hit": 1.4
+       "n_backbones_hit": 1.0
       },
       "static_equal": {
-       "efbc": 1.5999999999999999,
-       "joint": 1.6,
+       "efbc": 1.0,
+       "joint": 1.0,
        "struct": 1.6,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 1.6
+       "n_backbones_hit": 1.0
       },
       "greedy_fill": {
-       "efbc": 1.1289293850891267,
+       "efbc": 0.9509530701206647,
        "joint": 2.2,
-       "struct": 2.2,
+       "struct": 2.4,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 1.2
+       "n_backbones_hit": 1.0
       },
       "static_equal_matched": {
-       "efbc": 1.4,
-       "joint": 1.4,
+       "efbc": 1.0,
+       "joint": 1.0,
        "struct": 1.4,
        "calls": 38.4,
        "stopped": 0.0,
-       "n_backbones_hit": 1.4
+       "n_backbones_hit": 1.0
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 1.7999999999999998,
-       "joint": 1.8,
+       "efbc": 1.4,
+       "joint": 1.4,
        "struct": 1.8,
        "calls": 72.0,
        "stopped": 0.2,
-       "n_backbones_hit": 1.8
+       "n_backbones_hit": 1.4
       },
       "static_equal": {
-       "efbc": 2.0970562748477137,
-       "joint": 3.0,
+       "efbc": 1.533928944905386,
+       "joint": 2.4,
        "struct": 3.0,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 2.2
+       "n_backbones_hit": 1.6
       },
       "greedy_fill": {
-       "efbc": 1.3289293850891266,
-       "joint": 3.8,
+       "efbc": 1.192026340841558,
+       "joint": 3.2,
        "struct": 3.8,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 1.4
+       "n_backbones_hit": 1.2
       },
       "static_equal_matched": {
-       "efbc": 1.531370849898476,
-       "joint": 2.2,
+       "efbc": 1.1559526299369238,
+       "joint": 1.8,
        "struct": 2.2,
        "calls": 72.0,
        "stopped": 0.0,
-       "n_backbones_hit": 1.6
+       "n_backbones_hit": 1.2
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 2.1999999999999997,
-       "joint": 2.2,
-       "struct": 2.2,
+       "efbc": 1.6,
+       "joint": 1.6,
+       "struct": 2.6,
        "calls": 105.6,
        "stopped": 0.2,
-       "n_backbones_hit": 2.2
+       "n_backbones_hit": 1.6
       },
       "static_equal": {
-       "efbc": 2.3382345390160766,
-       "joint": 4.6,
+       "efbc": 1.7840526816831157,
+       "joint": 3.6,
        "struct": 4.6,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 2.4
+       "n_backbones_hit": 1.8
       },
       "greedy_fill": {
-       "efbc": 1.9477717591705086,
-       "joint": 6.0,
-       "struct": 6.0,
+       "efbc": 1.7840526816831157,
+       "joint": 5.0,
+       "struct": 6.2,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 2.0
+       "n_backbones_hit": 1.8
       },
       "static_equal_matched": {
-       "efbc": 1.7382345390160765,
-       "joint": 3.4,
+       "efbc": 1.3840526816831158,
+       "joint": 2.8,
        "struct": 3.4,
        "calls": 105.6,
        "stopped": 0.0,
-       "n_backbones_hit": 1.8
+       "n_backbones_hit": 1.4
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 2.3999999999999995,
-       "joint": 2.4,
-       "struct": 2.4,
-       "calls": 126.6,
-       "stopped": 0.8,
-       "n_backbones_hit": 2.4
+       "efbc": 1.6,
+       "joint": 1.6,
+       "struct": 3.4,
+       "calls": 139.2,
+       "stopped": 0.2,
+       "n_backbones_hit": 1.6
       },
       "static_equal": {
-       "efbc": 2.8075080369318854,
-       "joint": 7.0,
+       "efbc": 1.9350057518037804,
+       "joint": 4.8,
        "struct": 7.0,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 3.0
+       "n_backbones_hit": 2.0
       },
       "greedy_fill": {
-       "efbc": 2.5580212740254984,
-       "joint": 8.6,
-       "struct": 8.6,
+       "efbc": 2.0,
+       "joint": 6.0,
+       "struct": 7.8,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 2.6
+       "n_backbones_hit": 2.0
       },
       "static_equal_matched": {
-       "efbc": 2.229865574486381,
-       "joint": 4.6,
-       "struct": 4.6,
-       "calls": 126.6,
+       "efbc": 1.5429794109622226,
+       "joint": 3.8,
+       "struct": 5.4,
+       "calls": 139.2,
        "stopped": 0.0,
-       "n_backbones_hit": 2.4
+       "n_backbones_hit": 1.6
       }
      }
     }
@@ -4348,142 +4348,142 @@
    "3b5mC01": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.996031746031746,
+    "joint_rate": 0.7063492063492064,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.984456728957152,
+       "joint": 20.8,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999999999999998,
-       "joint": 42.0,
+       "efbc": 5.565899390352361,
+       "joint": 29.8,
        "struct": 42.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.60114625068726,
-       "joint": 41.6,
+       "efbc": 3.7648369647931164,
+       "joint": 31.2,
        "struct": 42.0,
        "calls": 42.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.434086208435362,
+       "joint": 23.4,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      },
      "84": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.984456728957152,
+       "joint": 20.8,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999557379690688,
-       "joint": 83.8,
+       "efbc": 5.684006012899876,
+       "joint": 59.2,
        "struct": 84.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 3.8441082872926517,
-       "joint": 83.0,
+       "efbc": 3.2585442095920913,
+       "joint": 66.4,
        "struct": 84.0,
        "calls": 84.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.434086208435362,
+       "joint": 23.4,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      },
      "126": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.984456728957152,
+       "joint": 20.8,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.9996118472744495,
-       "joint": 125.6,
+       "efbc": 5.718918584360179,
+       "joint": 89.6,
        "struct": 126.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.311654321928641,
-       "joint": 125.0,
+       "efbc": 3.6840291360754795,
+       "joint": 99.2,
        "struct": 126.0,
        "calls": 126.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.434086208435362,
+       "joint": 23.4,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.984456728957152,
+       "joint": 20.8,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 1.0,
        "n_backbones_hit": 6.0
       },
       "static_equal": {
-       "efbc": 5.999566252102785,
-       "joint": 167.2,
+       "efbc": 5.789370803633879,
+       "joint": 119.6,
        "struct": 168.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 6.0
       },
       "greedy_fill": {
-       "efbc": 4.942051478349395,
-       "joint": 167.0,
+       "efbc": 4.334564665765404,
+       "joint": 129.6,
        "struct": 168.0,
        "calls": 168.0,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.6
       },
       "static_equal_matched": {
-       "efbc": 5.999999999999998,
-       "joint": 24.0,
-       "struct": 24.0,
-       "calls": 24.0,
+       "efbc": 5.434086208435362,
+       "joint": 23.4,
+       "struct": 33.6,
+       "calls": 33.6,
        "stopped": 0.0,
-       "n_backbones_hit": 6.0
+       "n_backbones_hit": 5.8
       }
      }
     }
@@ -4491,36 +4491,36 @@
    "3bukC01": {
     "n_backbones": 6,
     "pool": 252,
-    "joint_rate": 0.42857142857142855,
+    "joint_rate": 0.4007936507936508,
     "by_budget": {
      "42": {
       "coverage_v2": {
-       "efbc": 3.4542413888633514,
-       "joint": 11.4,
-       "struct": 11.4,
+       "efbc": 3.478453307505196,
+       "joint": 10.2,
+       "struct": 11.6,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.8
       },
       "static_equal": {
-       "efbc": 3.2553047812540945,
-       "joint": 18.4,
+       "efbc": 3.280308462361931,
+       "joint": 16.8,
        "struct": 18.4,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.8
       },
       "greedy_fill": {
-       "efbc": 2.1440971744741137,
-       "joint": 29.0,
+       "efbc": 1.975480150105829,
+       "joint": 27.6,
        "struct": 29.0,
        "calls": 42.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.8
       },
       "static_equal_matched": {
-       "efbc": 3.2553047812540945,
-       "joint": 18.4,
+       "efbc": 3.280308462361931,
+       "joint": 16.8,
        "struct": 18.4,
        "calls": 42.0,
        "stopped": 0.0,
@@ -4529,32 +4529,32 @@
      },
      "84": {
       "coverage_v2": {
-       "efbc": 4.338716219926463,
-       "joint": 13.6,
+       "efbc": 4.349518649127894,
+       "joint": 12.2,
        "struct": 13.6,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       },
       "static_equal": {
-       "efbc": 3.2811238467057975,
-       "joint": 36.0,
+       "efbc": 3.2778603649500795,
+       "joint": 32.8,
        "struct": 36.0,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.2
       },
       "greedy_fill": {
-       "efbc": 2.29300336942926,
-       "joint": 70.8,
-       "struct": 70.8,
+       "efbc": 2.254740390182328,
+       "joint": 65.0,
+       "struct": 69.4,
        "calls": 84.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.8
       },
       "static_equal_matched": {
-       "efbc": 3.2811238467057975,
-       "joint": 36.0,
+       "efbc": 3.2778603649500795,
+       "joint": 32.8,
        "struct": 36.0,
        "calls": 84.0,
        "stopped": 0.0,
@@ -4563,68 +4563,68 @@
      },
      "126": {
       "coverage_v2": {
-       "efbc": 4.581775143253221,
-       "joint": 14.8,
-       "struct": 14.8,
-       "calls": 123.4,
+       "efbc": 4.606815076116285,
+       "joint": 14.2,
+       "struct": 15.6,
+       "calls": 124.0,
        "stopped": 0.4,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 3.3871339367758484,
-       "joint": 54.6,
+       "efbc": 3.4178071771034944,
+       "joint": 50.2,
        "struct": 54.6,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       },
       "greedy_fill": {
-       "efbc": 2.79452582389097,
-       "joint": 97.6,
-       "struct": 97.6,
+       "efbc": 2.780492877299051,
+       "joint": 90.4,
+       "struct": 97.0,
        "calls": 126.0,
        "stopped": 0.0,
        "n_backbones_hit": 3.8
       },
       "static_equal_matched": {
-       "efbc": 3.3563859676563954,
-       "joint": 53.0,
-       "struct": 53.0,
-       "calls": 123.4,
+       "efbc": 3.3857044856046072,
+       "joint": 49.0,
+       "struct": 53.4,
+       "calls": 124.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       }
      },
      "168": {
       "coverage_v2": {
-       "efbc": 4.612521695925751,
-       "joint": 15.2,
-       "struct": 15.2,
-       "calls": 129.4,
+       "efbc": 4.633293905550929,
+       "joint": 14.6,
+       "struct": 16.0,
+       "calls": 130.2,
        "stopped": 1.0,
        "n_backbones_hit": 5.0
       },
       "static_equal": {
-       "efbc": 3.3443985567632337,
-       "joint": 72.2,
+       "efbc": 3.3790146615482803,
+       "joint": 66.8,
        "struct": 72.2,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       },
       "greedy_fill": {
-       "efbc": 3.0810456119128156,
-       "joint": 106.0,
+       "efbc": 3.094015256577495,
+       "joint": 99.0,
        "struct": 106.0,
        "calls": 168.0,
        "stopped": 0.0,
        "n_backbones_hit": 4.2
       },
       "static_equal_matched": {
-       "efbc": 3.3337169549269055,
-       "joint": 55.6,
-       "struct": 55.6,
-       "calls": 129.4,
+       "efbc": 3.361590890217135,
+       "joint": 51.6,
+       "struct": 56.0,
+       "calls": 130.2,
        "stopped": 0.0,
        "n_backbones_hit": 4.8
       }
@@ -4636,65 +4636,65 @@
    "42": {
     "point": {
      "coverage_v2": {
-      "efbc": 4.21569672978766,
-      "joint": 14.46875,
-      "struct": 15.0375,
-      "calls": 30.20625,
-      "stopped": 0.7,
-      "n_backbones_hit": 4.3
+      "efbc": 4.156093206339037,
+      "joint": 13.26875,
+      "struct": 16.23125,
+      "calls": 31.3625,
+      "stopped": 0.65625,
+      "n_backbones_hit": 4.2625
      },
      "static_equal": {
-      "efbc": 4.014466244362789,
-      "joint": 23.19375,
+      "efbc": 3.9140024022400475,
+      "joint": 20.46875,
       "struct": 23.9,
       "calls": 42.0,
       "stopped": 0.0,
-      "n_backbones_hit": 4.2
+      "n_backbones_hit": 4.125
      },
      "greedy_fill": {
-      "efbc": 2.8114866793381643,
-      "joint": 25.49375,
-      "struct": 26.18125,
+      "efbc": 2.7173068183969193,
+      "joint": 22.6,
+      "struct": 25.925,
       "calls": 42.0,
       "stopped": 0.0,
-      "n_backbones_hit": 4.05
+      "n_backbones_hit": 3.975
      },
      "static_equal_matched": {
-      "efbc": 3.9663861444306097,
-      "joint": 16.3375,
-      "struct": 16.90625,
-      "calls": 30.20625,
+      "efbc": 3.849013201692036,
+      "joint": 15.1,
+      "struct": 18.0625,
+      "calls": 31.3625,
       "stopped": 0.0,
-      "n_backbones_hit": 4.1625
+      "n_backbones_hit": 4.075
      }
     },
     "contrasts": {
      "coverage_v2 - static_equal": {
       "role": "주 비교군",
-      "delta": 0.20123048542487076,
+      "delta": 0.2420908040989893,
       "ci95": [
-       0.09482904413744997,
-       0.30972833907023034
+       0.13993071045982663,
+       0.34387008487612736
       ],
       "excludes_zero": true,
       "primary": true
      },
      "coverage_v2 - greedy_fill": {
       "role": "보조 비교군",
-      "delta": 1.4042100504494957,
+      "delta": 1.4387863879421174,
       "ci95": [
-       1.0989853283511328,
-       1.7096634424639925
+       1.1214192287953844,
+       1.7339035092685071
       ],
       "excludes_zero": true,
       "primary": false
      },
      "coverage_v2 - static_equal_matched": {
       "role": "민감도",
-      "delta": 0.2493105853570503,
+      "delta": 0.3070800046470006,
       "ci95": [
-       0.14621444022090468,
-       0.35793892303657904
+       0.20170777257562822,
+       0.411164917056448
       ],
       "excludes_zero": true,
       "primary": false
@@ -4702,14 +4702,14 @@
     },
     "guardrail": {
      "structural_yield_ratio_vs_static_equal": {
-      "ratio": 0.6291841004184101,
-      "lcb95_onesided": 0.6023622047244095,
+      "ratio": 0.6791317991631799,
+      "lcb95_onesided": 0.6384007029876978,
       "threshold": 0.9,
       "pass": false
      },
      "structural_yield_ratio_vs_static_equal_matched": {
-      "ratio": 0.889463955637708,
-      "lcb95_onesided": 0.837137330754352,
+      "ratio": 0.8986159169550173,
+      "lcb95_onesided": 0.8481797056545314,
       "threshold": 0.9,
       "pass": false
      }
@@ -4718,65 +4718,65 @@
    "84": {
     "point": {
      "coverage_v2": {
-      "efbc": 4.3496089642437035,
-      "joint": 14.9625,
-      "struct": 15.55,
-      "calls": 40.3625,
-      "stopped": 0.8,
-      "n_backbones_hit": 4.4125
+      "efbc": 4.323774077878938,
+      "joint": 13.85625,
+      "struct": 17.525,
+      "calls": 42.66875,
+      "stopped": 0.79375,
+      "n_backbones_hit": 4.4
      },
      "static_equal": {
-      "efbc": 4.108045240795625,
-      "joint": 46.13125,
+      "efbc": 4.034808199880805,
+      "joint": 40.70625,
       "struct": 47.56875,
       "calls": 82.6875,
       "stopped": 0.0,
-      "n_backbones_hit": 4.38125
+      "n_backbones_hit": 4.34375
      },
      "greedy_fill": {
-      "efbc": 2.5066366022550053,
-      "joint": 52.76875,
-      "struct": 54.18125,
+      "efbc": 2.418670477324686,
+      "joint": 47.33125,
+      "struct": 53.74375,
       "calls": 82.6875,
       "stopped": 0.0,
-      "n_backbones_hit": 4.06875
+      "n_backbones_hit": 3.99375
      },
      "static_equal_matched": {
-      "efbc": 4.022622043975071,
-      "joint": 19.2125,
-      "struct": 19.83125,
-      "calls": 40.3625,
+      "efbc": 3.9172106868308667,
+      "joint": 18.25,
+      "struct": 21.95625,
+      "calls": 42.66875,
       "stopped": 0.0,
-      "n_backbones_hit": 4.30625
+      "n_backbones_hit": 4.23125
      }
     },
     "contrasts": {
      "coverage_v2 - static_equal": {
       "role": "주 비교군",
-      "delta": 0.24156372344807853,
+      "delta": 0.288965877998133,
       "ci95": [
-       0.11199249962526636,
-       0.3922518110942157
+       0.16136638911675583,
+       0.4357399536148945
       ],
       "excludes_zero": true,
       "primary": true
      },
      "coverage_v2 - greedy_fill": {
       "role": "보조 비교군",
-      "delta": 1.8429723619886982,
+      "delta": 1.905103600554252,
       "ci95": [
-       1.4575027133009264,
-       2.221557720860525
+       1.4968827739300656,
+       2.2915755622135596
       ],
       "excludes_zero": true,
       "primary": false
      },
      "coverage_v2 - static_equal_matched": {
       "role": "민감도",
-      "delta": 0.32698692026863263,
+      "delta": 0.4065633910480715,
       "ci95": [
-       0.1967371511697502,
-       0.4793929001566073
+       0.27226405762115213,
+       0.5510326844177289
       ],
       "excludes_zero": true,
       "primary": false
@@ -4784,14 +4784,14 @@
     },
     "guardrail": {
      "structural_yield_ratio_vs_static_equal": {
-      "ratio": 0.3268952831428196,
-      "lcb95_onesided": 0.3128390596745027,
+      "ratio": 0.3684141374326632,
+      "lcb95_onesided": 0.3364417893049687,
       "threshold": 0.9,
       "pass": false
      },
      "structural_yield_ratio_vs_static_equal_matched": {
-      "ratio": 0.7841159785691775,
-      "lcb95_onesided": 0.6887005649717515,
+      "ratio": 0.7981781952746939,
+      "lcb95_onesided": 0.703830760434534,
       "threshold": 0.9,
       "pass": false
      }
@@ -4800,65 +4800,65 @@
    "126": {
     "point": {
      "coverage_v2": {
-      "efbc": 4.423639944630216,
-      "joint": 15.175,
-      "struct": 15.7625,
-      "calls": 47.2875,
+      "efbc": 4.387184532334372,
+      "joint": 14.0875,
+      "struct": 17.7875,
+      "calls": 49.525,
       "stopped": 0.90625,
-      "n_backbones_hit": 4.48125
+      "n_backbones_hit": 4.45625
      },
      "static_equal": {
-      "efbc": 4.155183964454207,
-      "joint": 69.1625,
+      "efbc": 4.0795231272876595,
+      "joint": 60.88125,
       "struct": 71.21875,
       "calls": 123.375,
       "stopped": 0.0,
-      "n_backbones_hit": 4.45
+      "n_backbones_hit": 4.41875
      },
      "greedy_fill": {
-      "efbc": 2.9179603079136673,
-      "joint": 77.95,
-      "struct": 79.925,
+      "efbc": 2.8320668123967616,
+      "joint": 70.15625,
+      "struct": 79.69375,
       "calls": 123.375,
       "stopped": 0.0,
-      "n_backbones_hit": 4.1375
+      "n_backbones_hit": 4.0625
      },
      "static_equal_matched": {
-      "efbc": 4.046808092596876,
-      "joint": 20.90625,
-      "struct": 21.53125,
-      "calls": 47.2875,
+      "efbc": 3.9343827827677407,
+      "joint": 19.76875,
+      "struct": 23.64375,
+      "calls": 49.525,
       "stopped": 0.0,
-      "n_backbones_hit": 4.35625
+      "n_backbones_hit": 4.275
      }
     },
     "contrasts": {
      "coverage_v2 - static_equal": {
       "role": "주 비교군",
-      "delta": 0.26845598017600913,
+      "delta": 0.30766140504671213,
       "ci95": [
-       0.12226618662837119,
-       0.4461773244673388
+       0.1593156081484146,
+       0.47943335601078463
       ],
       "excludes_zero": true,
       "primary": true
      },
      "coverage_v2 - greedy_fill": {
       "role": "보조 비교군",
-      "delta": 1.505679636716549,
+      "delta": 1.55511771993761,
       "ci95": [
-       1.1968633592484936,
-       1.8060213439767878
+       1.2226427556663624,
+       1.8735261256747995
       ],
       "excludes_zero": true,
       "primary": false
      },
      "coverage_v2 - static_equal_matched": {
       "role": "민감도",
-      "delta": 0.37683185203334,
+      "delta": 0.452801749566631,
       "ci95": [
-       0.21876508160337282,
-       0.5607952866618477
+       0.2884268927412692,
+       0.6276425916185202
       ],
       "excludes_zero": true,
       "primary": false
@@ -4866,14 +4866,14 @@
     },
     "guardrail": {
      "structural_yield_ratio_vs_static_equal": {
-      "ratio": 0.22132514260640632,
-      "lcb95_onesided": 0.2112203674060523,
+      "ratio": 0.24975866608161476,
+      "lcb95_onesided": 0.22818791946308725,
       "threshold": 0.9,
       "pass": false
      },
      "structural_yield_ratio_vs_static_equal_matched": {
-      "ratio": 0.7320754716981132,
-      "lcb95_onesided": 0.6191066997518611,
+      "ratio": 0.7523129791171028,
+      "lcb95_onesided": 0.6404736275565125,
       "threshold": 0.9,
       "pass": false
      }
@@ -4882,65 +4882,65 @@
    "168": {
     "point": {
      "coverage_v2": {
-      "efbc": 4.454330952276301,
-      "joint": 15.21875,
-      "struct": 15.80625,
-      "calls": 49.125,
-      "stopped": 0.99375,
-      "n_backbones_hit": 4.5125
+      "efbc": 4.411185284505389,
+      "joint": 14.13125,
+      "struct": 17.8625,
+      "calls": 51.918749999999996,
+      "stopped": 0.96875,
+      "n_backbones_hit": 4.48125
      },
      "static_equal": {
-      "efbc": 4.178454609216985,
-      "joint": 92.08749999999999,
+      "efbc": 4.097313482385573,
+      "joint": 81.24375,
       "struct": 94.80624999999999,
       "calls": 162.75,
       "stopped": 0.0,
-      "n_backbones_hit": 4.5
+      "n_backbones_hit": 4.4625
      },
      "greedy_fill": {
-      "efbc": 3.384808854338867,
-      "joint": 100.8125,
-      "struct": 103.375,
+      "efbc": 3.2969662155690145,
+      "joint": 90.36875,
+      "struct": 103.3125,
       "calls": 162.75,
       "stopped": 0.0,
-      "n_backbones_hit": 4.275
+      "n_backbones_hit": 4.1875
      },
      "static_equal_matched": {
-      "efbc": 4.064529500480844,
-      "joint": 21.2125,
-      "struct": 21.8375,
-      "calls": 49.125,
+      "efbc": 3.9409904198299035,
+      "joint": 20.1,
+      "struct": 24.0125,
+      "calls": 51.918749999999996,
       "stopped": 0.0,
-      "n_backbones_hit": 4.3875
+      "n_backbones_hit": 4.29375
      }
     },
     "contrasts": {
      "coverage_v2 - static_equal": {
       "role": "주 비교군",
-      "delta": 0.2758763430593163,
+      "delta": 0.3138718021198157,
       "ci95": [
-       0.11424191895479119,
-       0.46595950468503755
+       0.1534810460458882,
+       0.5020697986081606
       ],
       "excludes_zero": true,
       "primary": true
      },
      "coverage_v2 - greedy_fill": {
       "role": "보조 비교군",
-      "delta": 1.0695220979374342,
+      "delta": 1.1142190689363742,
       "ci95": [
-       0.8433460554692633,
-       1.3000869729375748
+       0.8722433977012947,
+       1.3486474515328273
       ],
       "excludes_zero": true,
       "primary": false
      },
      "coverage_v2 - static_equal_matched": {
       "role": "민감도",
-      "delta": 0.38980145179545733,
+      "delta": 0.4701948646754852,
       "ci95": [
-       0.2210064908183158,
-       0.5862158797640626
+       0.2964295466995317,
+       0.6609386904470922
       ],
       "excludes_zero": true,
       "primary": false
@@ -4948,14 +4948,14 @@
     },
     "guardrail": {
      "structural_yield_ratio_vs_static_equal": {
-      "ratio": 0.16672160326982663,
-      "lcb95_onesided": 0.1588773789448326,
+      "ratio": 0.18841057419737625,
+      "lcb95_onesided": 0.1719875812781911,
       "threshold": 0.9,
       "pass": false
      },
      "structural_yield_ratio_vs_static_equal_matched": {
-      "ratio": 0.7238122495706927,
-      "lcb95_onesided": 0.6090398365679264,
+      "ratio": 0.7438833940655909,
+      "lcb95_onesided": 0.6308108108108108,
       "threshold": 0.9,
       "pass": false
      }

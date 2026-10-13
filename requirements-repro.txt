@@ -1,0 +1,18 @@
+# 원고와 보충자료의 분석을 재실행하기 위한 최소 의존성.
+#
+# 아래 버전은 결과를 생성할 때 보고된 실행 환경이다. scikit-learn 1.9.0,
+# NumPy 2.5.3, SciPy 1.18.1 에서 다시 실행했을 때도 비교한 모든 수치가
+# 상대 오차 1e-9 안에서 일치했으므로, 이 범위의 상위 버전을 써도 된다.
+#
+#   python3 -m venv .venv-repro
+#   .venv-repro/bin/pip install -r requirements-repro.txt
+#   .venv-repro/bin/python3 -c "import sklearn, numpy, matplotlib"
+#   PYTHON=.venv-repro/bin/python3 bash scripts/reproduce_paper_tables_figures.sh
+#
+# 구조예측(AlphaFold2/ColabFold)과 ProteinMPNN 재채점은 이 의존성으로 수행할 수
+# 없다. 저장된 격자와 임베딩 캐시를 입력으로 분석만 다시 돌린다.
+
+numpy==2.4.4
+scikit-learn==1.8.0
+scipy
+matplotlib

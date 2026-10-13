@@ -236,11 +236,18 @@ def run_group(rows, emb, mpnn, idx_by_unit, label) -> dict:
 
 
 def main(argv=None) -> int:
+    #: 격자 경로를 바꿔 끼울 수 있게 한다. 기본값은 동결된 코호트이므로
+    #: 인자를 주지 않으면 동작이 달라지지 않는다.
+    global V2, MPNN_CACHE
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--cohort", default=str(V2),
+                    help="격자 디렉터리. 기본값은 동결된 v2_multisource 다.")
     ap.add_argument("--esm-url", default="")
     ap.add_argument("--out", default=str(OUT_DIR / "v2_mpnn_baseline.json"))
     args = ap.parse_args(argv)
+    V2 = Path(args.cohort)
+    MPNN_CACHE = V2 / "mpnn_scores_v2.json"
     host = os.environ.get("RAPID_GPU_HOST", "").strip()
     url = args.esm_url or (f"http://{host}:18170" if host else "")
 

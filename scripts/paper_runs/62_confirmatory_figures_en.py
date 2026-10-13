@@ -21,6 +21,7 @@ JSON 이고 내가 쓴 것이라 이미 정해져 있다. 산출물이 없는 �
 from __future__ import annotations
 
 import json
+import os
 import math
 from pathlib import Path
 
@@ -32,7 +33,9 @@ import numpy as np
 import argparse
 
 ROOT = Path(__file__).resolve().parents[2]
-G = ROOT / "public_data" / "benchmark" / "gate0"
+#: 결과 디렉터리를 바꿔 끼울 수 있게 한다. 기본값은 저장소의 동결 경로다.
+G = Path(os.environ.get("RAPID_GATE0", "")) if os.environ.get("RAPID_GATE0") \
+    else ROOT / "public_data" / "benchmark" / "gate0"
 FIG = ROOT / "figures" / "submission"
 
 BLUE, ORANGE, GREEN, VERM = "#0072B2", "#E69F00", "#009E73", "#D55E00"

@@ -23,6 +23,7 @@ import argparse
 import collections
 import importlib.util
 import json
+import os
 import statistics
 import sys
 from pathlib import Path
@@ -38,6 +39,15 @@ OUT = PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "backbone_spread.js
 DEPTH, BUDGET, SENTINEL = 42, 80, 4
 
 
+def _esm_url_default() -> str:
+    """ESM_EMBEDDING_URL 이 없으면 빈 문자열. 호출자가 --esm-url 로 준다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 그대로 나간다. 임베딩
+    캐시가 있으면 이 값은 쓰이지 않는다.
+    """
+    return os.environ.get("ESM_EMBEDDING_URL", "").strip()
+
+
 def _mod(p, n):
     s = importlib.util.spec_from_file_location(n, HERE / p)
     m = importlib.util.module_from_spec(s)
@@ -48,7 +58,7 @@ def _mod(p, n):
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--esm-url", default="http://211.188.35.221:18170")
+    ap.add_argument("--esm-url", default=_esm_url_default())
     a = ap.parse_args(argv)
 
     m37 = _mod("37_depth_scaling.py", "m37")
