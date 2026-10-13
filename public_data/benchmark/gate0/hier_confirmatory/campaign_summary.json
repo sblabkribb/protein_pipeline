@@ -1,0 +1,16 @@
+{
+ "plan": "public_data/benchmark/gate0/multisource_validation_plan.json",
+ "n_runs": 34,
+ "n_source_generation_infeasible": 2,
+ "n_shortfall": 2,
+ "source_generation_infeasible": [
+  "v2_hier_confirmatory_1h6wA03_rfd3",
+  "v2_hier_confirmatory_3clqD02_rfd3"
+ ],
+ "shortfall": [
+  "v2_hier_confirmatory_1jyoE00_rfd3",
+  "v2_hier_confirmatory_1szwB02_rfd3"
+ ],
+ "n_candidates": 7728,
+ "utc": "2026-09-28T16:18:07Z"
+}
