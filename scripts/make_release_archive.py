@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 import shutil
 import subprocess
@@ -57,10 +58,42 @@ EXCLUDE = re.compile(r"(^|/)\.env($|\.)|heuristic-soluprot|bak-salvage|\.bak($|-
                      r"|(^|/)__pycache__/|(^|/)node_modules/|/af2_models/")
 
 #: 공개본에서 가릴 문자열. 맨 IP 숫자열은 CATH 코드와 모양이 같아 넣지 않는다.
-MASK = [
+BASE_MASK = [
     (re.compile(r"https?://\d{1,3}(?:\.\d{1,3}){3}(?::\d+)?"), "http://<internal-worker>"),
     (re.compile(r"/home/[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]*"), "<worker-path>"),
 ]
+
+#: 기관 고유의 호스트·도메인은 이 스크립트에 적지 않는다. 적어 두면 공개되는
+#: 스크립트가 그 이름을 드러내기 때문이다. 대신 저장소 밖(또는 .gitignore 된)
+#: 파일에서 한 줄에 하나씩 읽는다.
+#:   host  <IP 또는 호스트명>      -> <internal-host>
+#:   domain <등록 도메인>          -> <하위이름>.example.invalid
+LOCAL_MASK = Path(os.environ.get("RELEASE_MASK_FILE",
+                                 str(ROOT / "scripts" / ".release_mask.local")))
+
+
+def load_local_mask():
+    rules = []
+    if not LOCAL_MASK.is_file():
+        return rules
+    for line in LOCAL_MASK.read_text("utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        kind, _, value = line.partition(" ")
+        value = value.strip()
+        lit = re.escape(value)
+        esc = re.escape(value.replace(".", "\\."))   # 정규식 안의 이스케이프 형태
+        if kind == "host":
+            rules.append((re.compile(r"\b" + lit + r"\b"), "<internal-host>"))
+            rules.append((re.compile(esc), "<internal-host>"))
+        elif kind == "domain":
+            rules.append((re.compile(r"\b" + lit + r"\b"), "example.invalid"))
+            rules.append((re.compile(esc), "example\\.invalid"))
+    return rules
+
+
+MASK = BASE_MASK + load_local_mask()
 TEXT = {".py", ".sh", ".md", ".txt", ".csv", ".json", ".tsv", ".yaml", ".yml",
         ".cff", ".toml", ".cfg", ".ini", ".js", ".html", ".css", ".tex"}
 
@@ -78,6 +111,8 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", required=True)
     ap.add_argument("--out", default=str(ROOT / "dist"))
+    ap.add_argument("--ref", default="HEAD",
+                    help="내보낼 커밋. 묶음이 이 커밋과 정확히 일치한다 (기본 HEAD)")
     a = ap.parse_args(argv)
 
     name = f"protein_pipeline-{a.version}"
@@ -87,17 +122,27 @@ def main(argv=None) -> int:
     if stage.exists():
         shutil.rmtree(stage)
 
-    tracked = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT, check=True,
-                             capture_output=True).stdout.decode().split("\0")
-    files = sorted({f for f in tracked + EXTRA if f and not EXCLUDE.search(f)})
-    missing = [f for f in files if not (ROOT / f).is_file()]
-    files = [f for f in files if (ROOT / f).is_file()]
+    #: 작업 트리가 아니라 커밋에서 내보낸다. 미커밋 변경이 섞이지 않게 한다.
+    src_root = out / f".{name}-src"
+    if src_root.exists():
+        shutil.rmtree(src_root)
+    src_root.mkdir(parents=True)
+    arch = subprocess.run(["git", "archive", "--format=tar", a.ref], cwd=ROOT,
+                          check=True, capture_output=True).stdout
+    with tarfile.open(fileobj=__import__("io").BytesIO(arch)) as tf:
+        tf.extractall(src_root)
+    commit = subprocess.run(["git", "rev-parse", a.ref], cwd=ROOT, check=True,
+                            capture_output=True, text=True).stdout.strip()
+
+    files = sorted(str(p.relative_to(src_root)) for p in src_root.rglob("*")
+                   if p.is_file() and not EXCLUDE.search(str(p.relative_to(src_root))))
+    missing = [f for f in EXTRA if not (src_root / f).is_file()]
 
     masked = 0
     for rel in files:
         dst = stage / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        src = ROOT / rel
+        src = src_root / rel
         if src.suffix.lower() in TEXT:
             try:
                 text = src.read_text("utf-8")
@@ -121,6 +166,7 @@ def main(argv=None) -> int:
             for pat, _ in MASK:
                 if pat.search(t):
                     hits.append(f"{p.relative_to(stage)}: 내부 주소 잔존")
+                    break
     if hits:
         print("중단한다. 공개하면 안 되는 문자열이 남아 있다:")
         for h in hits[:20]:
@@ -133,9 +179,10 @@ def main(argv=None) -> int:
     digest = hashlib.sha256(tgz.read_bytes()).hexdigest()
     (out / f"{name}.tar.gz.sha256").write_text(f"{digest}  {tgz.name}\n")
 
-    print(f"파일 {len(files)}개 · 가린 문자열 {masked}건 · 비밀값 검사 통과")
+    shutil.rmtree(src_root)
+    print(f"커밋 {commit[:12]} · 파일 {len(files)}개 · 가린 문자열 {masked}건 · 비밀값 검사 통과")
     if missing:
-        print(f"없는 파일 {len(missing)}개 (건너뜀): {missing[:5]}")
+        print(f"경고: 재현에 필요한데 커밋에 없는 파일 {len(missing)}개: {missing[:6]}")
     print(f"{tgz}  {tgz.stat().st_size / 1048576:.1f} MB")
     print(f"sha256 {digest}")
     return 0

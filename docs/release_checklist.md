@@ -22,7 +22,9 @@ The command should print no paths.
 
 ```bash
 rg -n "(RUNPOD_API_KEY=.+|ENDPOINT_ID=.+|AWS_SECRET|SECRET_KEY=.+|PRIVATE KEY|\\bAKIA[0-9A-Z]{16}\\b)" .
-rg -n "(rapid-dev|rapid-staging|211\\.188\\.)" .
+# 기관 고유 호스트·도메인은 scripts/.release_mask.local (git 무시) 에 두고
+# scripts/make_release_archive.py 가 읽어서 가린다. 여기 적지 않는다.
+rg -n "(rapid-dev|rapid-staging)" .
 ```
 
 Also run your normal secret scanner, for example GitHub secret scanning,

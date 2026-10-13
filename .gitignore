@@ -163,3 +163,6 @@ manuscript (5).md
 
 # SoluProt 교체 전 격자·결과. 이력 보존용이며 배포 대상이 아니다.
 *heuristic-soluprot*
+
+# 공개 묶음 정리용 로컬 목록. 기관 고유 값을 담으므로 올리지 않는다.
+scripts/.release_mask.local
