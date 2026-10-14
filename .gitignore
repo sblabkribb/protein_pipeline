@@ -148,6 +148,9 @@ manuscript (5).md
 !/data/benchmark/
 /data/benchmark/*
 !/data/benchmark/*_emb_320d.npz
+!/data/benchmark/results/
+/data/benchmark/results/*
+!/data/benchmark/results/exp1_unique_sequence.json
 
 # 살베지 백업본. 원본 격자와 중복이고 내부 주소가 남아 있다.
 *.bak-salvage
