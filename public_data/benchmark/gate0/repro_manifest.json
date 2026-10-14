@@ -1,7 +1,7 @@
 {
  "note": "RAPID 재현 패키지의 입력·결과·사전지정 문서 체크섬.",
  "algorithm": "sha256",
- "total_bytes": 35898900,
+ "total_bytes": 37372184,
  "files": [
   {
    "kind": "입력",
@@ -135,6 +135,62 @@
    "description": "종료 규칙 진단",
    "bytes": 52787,
    "sha256": "f7d5c82e5c0b174f6d4b11ebe351d5f4de01745a55e2aacc5ba1e8d252e12cd5"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/holdout_grid/af2_order_metric.csv",
+   "description": "파일럿 격자 (12 표적)",
+   "bytes": 645877,
+   "sha256": "300de3d8750ef47cceda8e9f53680e0035990d8ddb71fbccd9288ae80ffbef2c"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/holdout_grid/sequences.csv",
+   "description": "파일럿 격자의 설계 서열",
+   "bytes": 583792,
+   "sha256": "4939890813d2c54cb6786ccfd024f8e56345cbc88ee9634b78f0a6eac9ff15cd"
+  },
+  {
+   "kind": "입력",
+   "path": "public_data/benchmark/gate0/holdout_grid/mpnn_scores.json",
+   "description": "파일럿 격자의 ProteinMPNN 재채점",
+   "bytes": 100603,
+   "sha256": "39bc2ef53dfcfaa7d603072003bf36e66bcb637d65e22a6197ac291ea7393e95"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/fewshot_jointpass_transfer.json",
+   "description": "파일럿 전이 시험",
+   "bytes": 83777,
+   "sha256": "447234c691be3e0bec8ebe35baad07aca5126d71cddee9a1252736ee1be51c0f"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/feedback_decomposition.json",
+   "description": "배분 요소 분해",
+   "bytes": 5369,
+   "sha256": "71b2fd406efe3c93744e99416b44272ca78a9d2acf6cae27a51c3cad4c0045a3"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/gate0/backbone_spread.json",
+   "description": "후보 집중도 진단",
+   "bytes": 12252,
+   "sha256": "7b75c1ebefd1fa00ba7c83ba56dc93a0cc0b504abc0ea829874325da1d913e45"
+  },
+  {
+   "kind": "결과",
+   "path": "public_data/benchmark/results/structural_context_threeway_N9.csv",
+   "description": "다중 백본 다양성 비교 (9 표적)",
+   "bytes": 782,
+   "sha256": "846f098cc42a4156cf7edcb1b5e9a25de0cc1eb5b3d0b226d3ac3d65a6203b42"
+  },
+  {
+   "kind": "결과",
+   "path": "data/benchmark/results/exp1_unique_sequence.json",
+   "description": "실험 1 중복 통제 재평가",
+   "bytes": 40832,
+   "sha256": "4032cc5c446a1187c83c579d986f22b1b8cd408ae46c338cafac298e8948e5f4"
   },
   {
    "kind": "사전지정",
