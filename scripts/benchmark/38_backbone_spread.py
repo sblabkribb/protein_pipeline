@@ -59,6 +59,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--esm-url", default=_esm_url_default())
+    ap.add_argument("--out", default=str(OUT))
     a = ap.parse_args(argv)
 
     m37 = _mod("37_depth_scaling.py", "m37")
@@ -130,8 +131,9 @@ def main(argv=None) -> int:
                                  "mean_max_share": ms,
                                  "n_observations": len(v), "per_run": v}
         print(f"  {name:16s}{nb:14.1f}{ms * 100:17.0f}%")
-    OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
-    print(f"\n{OUT}")
+    Path(a.out).write_text(json.dumps(out, ensure_ascii=False, indent=1),
+                           encoding="utf-8")
+    print(f"\n{a.out}")
     return 0
 
 

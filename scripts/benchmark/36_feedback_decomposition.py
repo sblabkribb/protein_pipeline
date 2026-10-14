@@ -27,6 +27,7 @@
 
 from __future__ import annotations
 
+import argparse
 import collections
 import hashlib
 import importlib.util
@@ -123,7 +124,11 @@ def replay(y, X, m, bb_of, B, seed, fit_rank):
     return got
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__,
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--out", default=str(OUT))
+    args = ap.parse_args(argv)
     rows, emb, mpnn = m35.load("")
     fit_rank = _mod("31_fewshot_jointpass_transfer.py", "m31").fit_rank
     out = {"purpose": ("adaptive_sentinel 의 이득을 배분방식·탐색비용·되먹임으로 "
@@ -211,8 +216,8 @@ def main() -> int:
                   f"[{s['ci95'][0]:+.2f},{s['ci95'][1]:+.2f}] "
                   f"{'0 제외' if s['excludes_zero'] else '0 포함'}")
     text = json.dumps(out, ensure_ascii=False, indent=1)
-    OUT.write_text(text, encoding="utf-8")
-    print(f"\n{OUT}\nsha256 {hashlib.sha256(text.encode()).hexdigest()}")
+    Path(args.out).write_text(text, encoding="utf-8")
+    print(f"\n{args.out}\nsha256 {hashlib.sha256(text.encode()).hexdigest()}")
     return 0
 
 

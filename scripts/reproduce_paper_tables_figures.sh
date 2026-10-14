@@ -53,13 +53,16 @@ ANALYSES=(
   "구조 분산 진단:scripts/benchmark/41_structural_dispersion.py:structural_dispersion"
   "후속 평가 주 분석:scripts/benchmark/42_hierarchical_confirmatory.py:hierarchical_confirmatory"
   "종료 규칙 진단:scripts/benchmark/45_stop_rule_diagnosis.py:stop_rule_diagnosis"
+  "파일럿 전이 시험:scripts/benchmark/31_fewshot_jointpass_transfer.py:fewshot_jointpass_transfer:--baselines"
+  "배분 요소 분해:scripts/benchmark/36_feedback_decomposition.py:feedback_decomposition"
+  "후보 집중도 진단:scripts/benchmark/38_backbone_spread.py:backbone_spread"
 )
 
 fail=0
 ran=0
 figfail=0
 for entry in "${ANALYSES[@]}"; do
-  IFS=: read -r label script stem <<<"$entry"
+  IFS=: read -r label script stem extra <<<"$entry"
   orig="$GATE0/$stem.json"
   if [[ ! -f "$script" ]]; then
     echo "[건너뜀] $label — $script 없음"
@@ -70,7 +73,8 @@ for entry in "${ANALYSES[@]}"; do
     continue
   fi
   echo "[실행] $label"
-  if ! $PY "$script" --out "$OUT/$stem.json" >"$OUT/$stem.log" 2>&1; then
+  if ! $PY "$script" ${extra:+$extra} --out "$OUT/$stem.json" \
+        >"$OUT/$stem.log" 2>&1; then
     echo "  실행 실패. 로그: $OUT/$stem.log"
     tail -5 "$OUT/$stem.log" 2>/dev/null | sed 's/^/      /' || true
     fail=$((fail + 1))
