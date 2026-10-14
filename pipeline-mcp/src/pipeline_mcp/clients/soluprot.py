@@ -11,7 +11,8 @@ from ..models import SequenceRecord
 @dataclass(frozen=True)
 class SoluProtClient:
     url: str
-    timeout_s: float = 60.0
+    # SoluProt 1.0.1.0 은 서열당 약 50 ms 가 걸리므로 큰 배치에는 60초로 부족하다.
+    timeout_s: float = 1800.0
 
     def score(self, sequences: list[SequenceRecord]) -> dict[str, float]:
         payload = {
