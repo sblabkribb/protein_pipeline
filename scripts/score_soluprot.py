@@ -38,12 +38,16 @@ from pathlib import Path
 
 
 def candidate_sequences(cohort: Path) -> dict[str, str]:
-    """sequence_id -> 서열. 코호트마다 후보 파일 이름이 다르다."""
+    """sequence_id -> 서열. 코호트마다 후보 파일 이름과 형식이 다르다."""
     for name in ("candidates.json", "candidates_ext.json"):
         p = cohort / name
         if p.is_file():
             return {c["sequence_id"]: c["sequence"]
                     for c in json.loads(p.read_text("utf-8"))}
+    p = cohort / "sequences.csv"
+    if p.is_file():
+        with p.open(encoding="utf-8") as fh:
+            return {r["sequence_id"]: r["sequence"] for r in csv.DictReader(fh)}
     raise SystemExit(f"후보 파일이 없다: {cohort}")
 
 

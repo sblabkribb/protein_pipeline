@@ -13,77 +13,206 @@
    "n_units": 8,
    "budget": 80,
    "point": {
-    "warmup_informed": 48.6,
-    "greedy_frozen": 49.9,
-    "greedy_frozen_explore": 49.75,
-    "adaptive_sentinel": 49.75
+    "warmup_informed": 45.425,
+    "greedy_frozen": 45.9,
+    "greedy_frozen_explore": 45.275,
+    "adaptive_sentinel": 45.225
+   },
+   "per_unit": {
+    "1j5uA01": {
+     "warmup_informed": 47.0,
+     "greedy_frozen": 44.8,
+     "greedy_frozen_explore": 44.0,
+     "adaptive_sentinel": 43.0
+    },
+    "1n81A00": {
+     "warmup_informed": 45.0,
+     "greedy_frozen": 52.0,
+     "greedy_frozen_explore": 52.0,
+     "adaptive_sentinel": 52.0
+    },
+    "1sdiA00": {
+     "warmup_informed": 65.6,
+     "greedy_frozen": 59.2,
+     "greedy_frozen_explore": 57.0,
+     "adaptive_sentinel": 58.2
+    },
+    "1x3aA00": {
+     "warmup_informed": 64.4,
+     "greedy_frozen": 65.8,
+     "greedy_frozen_explore": 66.2,
+     "adaptive_sentinel": 66.2
+    },
+    "4ai2A02": {
+     "warmup_informed": 4.8,
+     "greedy_frozen": 4.8,
+     "greedy_frozen_explore": 4.8,
+     "adaptive_sentinel": 5.0
+    },
+    "4ifxA00": {
+     "warmup_informed": 62.0,
+     "greedy_frozen": 61.4,
+     "greedy_frozen_explore": 60.2,
+     "adaptive_sentinel": 60.0
+    },
+    "4wexA00": {
+     "warmup_informed": 55.6,
+     "greedy_frozen": 60.6,
+     "greedy_frozen_explore": 60.8,
+     "adaptive_sentinel": 60.0
+    },
+    "6vqfA00": {
+     "warmup_informed": 19.0,
+     "greedy_frozen": 18.6,
+     "greedy_frozen_explore": 17.2,
+     "adaptive_sentinel": 17.4
+    }
    },
    "steps": {
     "greedy_frozen-warmup_informed": {
      "means": "배분 방식 (비례→그리디)",
-     "delta": 1.2999999999999972,
+     "delta": 0.4750000000000014,
      "ci95": [
-      -0.3249999999999993,
+      -2.325000000000003,
       3.25
      ],
      "excludes_zero": false
     },
     "greedy_frozen_explore-greedy_frozen": {
      "means": "탐색 비용 (전부 RF→25% 무작위)",
-     "delta": -0.14999999999999858,
+     "delta": -0.625,
      "ci95": [
-      -0.75,
-      0.4000000000000057
+      -1.2749999999999986,
+      -0.04999999999999716
      ],
-     "excludes_zero": false
+     "excludes_zero": true
     },
     "adaptive_sentinel-greedy_frozen_explore": {
      "means": "**되먹임** (고정→갱신)",
-     "delta": 0.0,
+     "delta": -0.04999999999999716,
      "ci95": [
-      -0.32499999999999574,
-      0.25
+      -0.4750000000000014,
+      0.3999999999999986
      ],
      "excludes_zero": false
+    }
+   },
+   "greedy_frozen-rf_only": {
+    "n_units": 8,
+    "delta": 0.8750000000000009,
+    "ci95": [
+     -2.3000000000000007,
+     4.2
+    ],
+    "per_unit_delta": {
+     "1j5uA01": -3.200000000000003,
+     "1n81A00": 10.0,
+     "1sdiA00": -6.599999999999994,
+     "1x3aA00": 1.0,
+     "4ai2A02": 0.0,
+     "4ifxA00": 1.0,
+     "4wexA00": 4.200000000000003,
+     "6vqfA00": 0.6000000000000014
     }
    }
   },
   "bioemu": {
-   "n_units": 6,
+   "n_units": 7,
    "budget": 80,
    "point": {
-    "warmup_informed": 66.83333333333333,
-    "greedy_frozen": 66.7,
-    "greedy_frozen_explore": 66.23333333333333,
-    "adaptive_sentinel": 66.3
+    "warmup_informed": 66.45714285714286,
+    "greedy_frozen": 65.77142857142857,
+    "greedy_frozen_explore": 65.02857142857142,
+    "adaptive_sentinel": 65.25714285714285
+   },
+   "per_unit": {
+    "1j5uA01": {
+     "warmup_informed": 32.2,
+     "greedy_frozen": 35.6,
+     "greedy_frozen_explore": 36.4,
+     "adaptive_sentinel": 35.6
+    },
+    "1n81A00": {
+     "warmup_informed": 70.8,
+     "greedy_frozen": 71.4,
+     "greedy_frozen_explore": 70.4,
+     "adaptive_sentinel": 70.8
+    },
+    "1sdiA00": {
+     "warmup_informed": 72.2,
+     "greedy_frozen": 71.2,
+     "greedy_frozen_explore": 69.4,
+     "adaptive_sentinel": 69.8
+    },
+    "1x3aA00": {
+     "warmup_informed": 62.2,
+     "greedy_frozen": 57.2,
+     "greedy_frozen_explore": 56.2,
+     "adaptive_sentinel": 57.6
+    },
+    "4ai2A02": {
+     "warmup_informed": 72.4,
+     "greedy_frozen": 69.6,
+     "greedy_frozen_explore": 67.8,
+     "adaptive_sentinel": 67.8
+    },
+    "4ifxA00": {
+     "warmup_informed": 75.8,
+     "greedy_frozen": 75.8,
+     "greedy_frozen_explore": 75.4,
+     "adaptive_sentinel": 75.6
+    },
+    "4wexA00": {
+     "warmup_informed": 79.6,
+     "greedy_frozen": 79.6,
+     "greedy_frozen_explore": 79.6,
+     "adaptive_sentinel": 79.6
+    }
    },
    "steps": {
     "greedy_frozen-warmup_informed": {
      "means": "배분 방식 (비례→그리디)",
-     "delta": -0.13333333333332575,
+     "delta": -0.6857142857142833,
      "ci95": [
-      -2.0999999999999943,
-      1.6333333333333329
+      -2.5714285714285694,
+      1.142857142857146
      ],
      "excludes_zero": false
     },
     "greedy_frozen_explore-greedy_frozen": {
      "means": "탐색 비용 (전부 RF→25% 무작위)",
-     "delta": -0.46666666666666856,
+     "delta": -0.7428571428571473,
      "ci95": [
-      -1.066666666666677,
-      0.13333333333333997
+      -1.3714285714285666,
+      -0.08571428571428896
      ],
-     "excludes_zero": false
+     "excludes_zero": true
     },
     "adaptive_sentinel-greedy_frozen_explore": {
      "means": "**되먹임** (고정→갱신)",
-     "delta": 0.06666666666666288,
+     "delta": 0.22857142857142776,
      "ci95": [
-      -0.5333333333333314,
-      0.7333333333333343
+      -0.20000000000000284,
+      0.6857142857142833
      ],
      "excludes_zero": false
+    }
+   },
+   "greedy_frozen-rf_only": {
+    "n_units": 7,
+    "delta": -0.7428571428571463,
+    "ci95": [
+     -2.942857142857144,
+     1.2285714285714247
+    ],
+    "per_unit_delta": {
+     "1j5uA01": 3.3999999999999986,
+     "1n81A00": 0.20000000000000284,
+     "1sdiA00": -1.0,
+     "1x3aA00": -6.0,
+     "4ai2A02": -2.8000000000000114,
+     "4ifxA00": 0.3999999999999915,
+     "4wexA00": 0.5999999999999943
     }
    }
   }

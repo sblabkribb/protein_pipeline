@@ -161,7 +161,9 @@ def main() -> int:
             return statistics.mean(per_unit[t][a] for t in ts)
 
         res = {"n_units": len(names), "budget": m35.PRIMARY_BUDGET,
-               "point": {a: agg(names, a) for a in LADDER}, "steps": {}}
+               "point": {a: agg(names, a) for a in LADDER},
+               "per_unit": {t: dict(v) for t, v in sorted(per_unit.items())},
+               "steps": {}}
         for lo, hi, what in ((0, 1, "배분 방식 (비례→그리디)"),
                              (1, 2, "탐색 비용 (전부 RF→25% 무작위)"),
                              (2, 3, "**되먹임** (고정→갱신)")):
@@ -172,6 +174,31 @@ def main() -> int:
                 "means": what, "delta": agg(names, a) - agg(names, b),
                 "ci95": [q(.025), q(.975)],
                 "excludes_zero": bool(q(.025) > 0 or q(.975) < 0)}
+        #: 보충자료가 인용하는 "그리디 배분 - 서열 순위화" 대비. rf_only 는 35_ 가
+        #: 저장한 표적별 값을 그대로 쓴다. 두 파일 모두 커밋되므로 대조할 수 있다.
+        rf_only = {}
+        replay_path = (PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
+                       / "hierarchical_replay.json")
+        if replay_path.is_file():
+            saved = json.loads(replay_path.read_text("utf-8"))
+            for t, v in (saved.get("sources", {}).get(source, {})
+                         .get("per_unit", {}).items()):
+                got = v.get("by_budget", {}).get(str(m35.PRIMARY_BUDGET), {})
+                if "rf_only" in got:
+                    rf_only[t] = float(got["rf_only"])
+        shared = [t for t in names if t in rf_only]
+        if shared:
+            def dgap(ts):
+                return statistics.mean(per_unit[t]["greedy_frozen"] - rf_only[t]
+                                       for t in ts)
+            db = sorted(dgap([t for t in x if t in rf_only]) for x in boots
+                        if any(t in rf_only for t in x))
+            q = lambda p: db[min(len(db) - 1, max(0, int(p * len(db))))]
+            res["greedy_frozen-rf_only"] = {
+                "n_units": len(shared), "delta": dgap(shared),
+                "ci95": [q(.025), q(.975)],
+                "per_unit_delta": {t: per_unit[t]["greedy_frozen"] - rf_only[t]
+                                   for t in shared}}
         out["sources"][source] = res
 
     for src, r in out["sources"].items():
