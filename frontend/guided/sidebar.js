@@ -26,6 +26,21 @@ export function runItemLabel(run) {
   return parts.length ? parts.join(" · ") : "idle";
 }
 
+// 목록 훑기용 상태 점. 색은 Run 탭 칩(okchip/badchip/warnchip)과 같은 근거
+// 체계를 따른다 - 목록과 상세가 다른 말을 하면 안 된다. 모르는 상태는 점을
+// 비운다(회색) - 프런트가 해석을 덧붙이지 않는다.
+const RUN_DOT_CLASS = {
+  running: "sdot-run",
+  done: "sdot-ok",
+  failed: "sdot-bad",
+  cancelled: "sdot-bad",
+  stalled: "sdot-warn",
+};
+
+export function runDotClass(state) {
+  return RUN_DOT_CLASS[String(state || "").trim().toLowerCase()] || "";
+}
+
 export async function loadRunList(onSelect) {
   const host = document.getElementById("runList");
   host.classList.remove("empty");
@@ -45,7 +60,11 @@ export async function loadRunList(onSelect) {
       node.type = "button";
       node.className = "run-item";
       node.dataset.runId = run.run_id;
-      node.appendChild(el("span", "rid", run.run_id));
+      const rid = el("span", "rid");
+      const dotCls = runDotClass(run.state);
+      if (dotCls) rid.appendChild(el("span", `sdot ${dotCls}`));
+      rid.appendChild(el("span", "", run.run_id));
+      node.appendChild(rid);
       node.appendChild(el("span", "rmeta", runItemLabel(run)));
       node.addEventListener("click", () => {
         highlightRun(run.run_id);

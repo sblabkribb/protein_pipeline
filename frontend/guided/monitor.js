@@ -74,15 +74,20 @@ export async function loadRunStatus(runId, { isStale = () => false } = {}) {
     runState.status = { stage: String(info.stage || ""), state: String(info.state || "") };
     host.classList.remove("empty");
     host.replaceChildren();
+    // 상태 칩은 상단바 칩과 같은 근거 체계를 쓴다 - 완료는 측정, 실패는 차단,
+    // 나머지는 무색. 여기서 새 해석을 덧붙이지 않는다.
+    const stateChipClass = { done: "okchip", failed: "badchip", stalled: "warnchip" }[
+      String(info.state || "").trim().toLowerCase()
+    ] || "";
     const rows = [
-      ["실행", runId],
-      ["단계", info.stage || "-"],
-      ["상태", info.state || "-"],
-      ["갱신", info.updated_at || "-"],
+      ["실행", runId, ""],
+      ["단계", info.stage || "-", ""],
+      ["상태", info.state || "-", stateChipClass],
+      ["갱신", info.updated_at || "-", ""],
     ];
-    for (const [label, value] of rows) {
+    for (const [label, value, cls] of rows) {
       const row = el("div", "skill");
-      row.append(el("span", "", label), el("span", "chip", value));
+      row.append(el("span", "", label), el("span", cls ? `chip ${cls}` : "chip", value));
       host.appendChild(row);
     }
     if (info.error_summary) {

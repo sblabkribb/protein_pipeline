@@ -11,6 +11,10 @@ export const HIT_COLUMNS = ["seq_id", "score", "soluprot", "plddt", "rmsd", "nov
 
 const FUNNEL_COLUMNS = ["tier", "designed", "soluprot", "af2", "af2_selected"];
 
+// 퍼널 열의 한국어 이름. 막대 색은 명도 순서고 이 범례가 순서를 말한다.
+// 점수를 새로 계산하는 게 아니라 열 이름을 옮긴 것뿐이다.
+const FUNNEL_LEGEND = ["설계", "가용성 통과", "구조 검증", "최종 선별"];
+
 // 티어 한 개의 퍼널 행. soluprot.json / af2_scores.json 은 파이프라인이 쓰는
 // 계약 필드(scores, passed_ids / candidate_ids, selected_ids)를 그대로 읽는다.
 export function buildFunnelRow(tier, soluprot, af2) {
@@ -76,6 +80,10 @@ export function renderFunnel(host, rows) {
     host.appendChild(el("p", "note", "이 실행에는 티어 결과가 없습니다."));
     return;
   }
+  // 막대는 명도 단계로 열을 구별한다(같은 action 색조). 순서는 이 범례가 말한다.
+  const legend = el("div", "funnellegend");
+  for (const label of FUNNEL_LEGEND) legend.appendChild(el("span", "fleg", label));
+  host.appendChild(legend);
   const max = Math.max(...rows.map((r) => Math.max(r.designed, 1)));
   const bar = el("div", "funnel");
   for (const row of rows) {
