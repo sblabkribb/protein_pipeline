@@ -8,6 +8,7 @@ CATH run 은 backbone PDB 가 `request.json` 의 `target_pdb` 에 인라인으�
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import csv
 import json
 from pathlib import Path
@@ -71,6 +72,16 @@ def main(argv: list[str] | None = None) -> int:
              "합산하면 yield 가 같은 척도가 아니다. 빈 값이면 전체 tier 합산.",
     )
     parser.add_argument("--out-dir", default=str(PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "backbones"))
+    parser.add_argument(
+        "--dump-sequences",
+        help="라벨에 들어가는 고유 설계 서열을 FASTA 로 내보내고 끝낸다. "
+             "SoluProt 으로 다시 채점할 때 쓴다.",
+    )
+    parser.add_argument(
+        "--soluprot-scores",
+        help="서열 -> 점수 JSON. 실행 기록에 저장된 값 대신 이 값을 쓴다. "
+             "운영 서버가 쓰던 점수를 공식 배포본 점수로 바꿀 때 쓴다.",
+    )
     args = parser.parse_args(argv)
 
     per_run: dict[str, list] = {}
@@ -86,6 +97,29 @@ def main(argv: list[str] | None = None) -> int:
         per_run = {
             k: [r for r in recs if r.tier == args.tier] for k, recs in per_run.items()
         }
+    if args.dump_sequences:
+        seen = {rec.sequence for recs in per_run.values() for rec in recs}
+        with open(args.dump_sequences, "w", encoding="utf-8") as fh:
+            for i, seq in enumerate(sorted(seen)):
+                fh.write(f">s{i}\n{seq}\n")
+        print(f"고유 서열 {len(seen)}개 -> {args.dump_sequences}")
+        return 0
+
+    if args.soluprot_scores:
+        scores = json.loads(Path(args.soluprot_scores).read_text("utf-8"))
+        missing = 0
+        for run_path, recs in per_run.items():
+            fixed = []
+            for rec in recs:
+                new_score = scores.get(rec.sequence)
+                if new_score is None:
+                    missing += 1
+                    fixed.append(rec)
+                else:
+                    fixed.append(dataclasses.replace(rec, soluprot=float(new_score)))
+            per_run[run_path] = fixed
+        print(f"SoluProt 점수 교체 · 점수가 없는 설계 {missing}건")
+
     all_records = [rec for recs in per_run.values() for rec in recs]
     yields = backbone_yields(all_records)
 

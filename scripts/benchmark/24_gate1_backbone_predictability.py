@@ -527,6 +527,10 @@ def numerics(stability: list[dict]) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", default=str(GATE0 / "gate1_backbone_predictability.json"))
+    parser.add_argument(
+        "--allow-cohort-change", action="store_true",
+        help="동결된 코호트 크기와 달라도 진행한다. 동결 판정과 나란히 두면 안 되므로 "
+             "결과에 벗어난 사실을 함께 기록한다.")
     args = parser.parse_args()
 
     grid = C.load_holdout_grid()
@@ -548,15 +552,20 @@ def main() -> int:
 
     primary = arms[GO_ARM]
     informative = primary["informative_targets"]
-    if informative != 11:
+    cohort_deviates = informative != 11
+    if cohort_deviates and not args.allow_cohort_change:
         raise SystemExit(
             f"primary informative 타겟이 {informative} 다. 스펙 §3 은 11 이라고 "
-            "동결했다 - 코호트 구성이 스펙과 다르므로 중단한다."
+            "동결했다 - 코호트 구성이 스펙과 다르므로 중단한다. 공식 SoluProt 으로 "
+            "라벨을 다시 매긴 코호트를 보려면 --allow-cohort-change 를 주고 동결본과 "
+            "다른 파일에 쓴다."
         )
     go = bool(primary["arm_meets_frozen_rule"])
 
     result = {
         "purpose": "Gate 1 - backbone predictability. 정책 비교가 아니다.",
+        "cohort_deviates_from_frozen_spec": cohort_deviates,
+        "frozen_informative_targets": 11,
         "spec": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
         "numerics": numerics(stability),
         "provenance": G.run_provenance(

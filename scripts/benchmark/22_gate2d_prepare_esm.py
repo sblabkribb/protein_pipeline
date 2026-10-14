@@ -18,8 +18,11 @@ import os
 from pathlib import Path
 
 import numpy as np
-import torch
-from transformers import AutoTokenizer, EsmModel
+
+#: torch 와 transformers 는 임베딩을 새로 만들 때만 필요하다. 이 파일의
+#: mutation_sites 와 wt_sequence_from_pdb 는 다른 분석이 그대로 가져다 쓰는
+#: 순수 함수이므로, 그 쪽에서 무거운 의존성을 요구하지 않도록 함수 안에서
+#: 불러온다.
 
 PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT")
                     or Path(__file__).resolve().parents[2]).resolve()
@@ -64,13 +67,16 @@ def wt_sequence_from_pdb(path: Path) -> str:
     return "".join(seq)
 
 
-def embed(sequences: list[str], *, device: torch.device,
-          batch_size: int = 8) -> tuple[np.ndarray, list[np.ndarray]]:
+def embed(sequences: list[str], *, device, batch_size: int = 8
+          ) -> tuple[np.ndarray, list[np.ndarray]]:
     """(mean-pooled (n, EMB_DIM), 서열별 토큰 임베딩 리스트) 를 돌려준다.
 
     토큰 임베딩은 ΔESM_mut 에 필요하다. 특수 토큰(BOS/EOS)을 잘라 잔기와
     1:1 로 맞춘다 - 이걸 틀리면 변이 위치가 한 칸씩 밀린다.
     """
+    import torch
+    from transformers import AutoTokenizer, EsmModel
+
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model = EsmModel.from_pretrained(MODEL_NAME).to(device).eval()
 
@@ -107,6 +113,8 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--batch-size", type=int, default=8)
     args = parser.parse_args()
+
+    import torch
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
