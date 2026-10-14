@@ -142,29 +142,42 @@ SoluProt은 점수만 계산해 필터링하므로 RunPod가 필수는 아닙니
 - 포트 `18081`
 - 바인드 `127.0.0.1`(외부 공개 불필요)
 
-### 이 저장소에 포함된 간이 SoluProt 서버 실행(권장, 18081)
-이 저장소에는 `pipeline_mcp.soluprot_server`(간이 점수 서버)가 포함되어 있습니다.
+### SoluProt 채점 서버 실행(18081)
+
+`pipeline_mcp.soluprot_server` 는 정품 SoluProt 1.0.1.0(Hon et al. 2021)을 호출하는
+HTTP 서버입니다. SoluProt 자체는 Python 3.7 과 scikit-learn 0.20.1 을 요구하므로 별도
+환경에 설치하고, 서버는 그 환경의 인터프리터를 하위 프로세스로 실행합니다. TMHMM 은
+별도 학술 등록이 필요하므로 저자가 함께 배포하는 TMHMM 비의존 모델
+`grad_clf_v1_tc_notmhmm` 을 사용합니다.
+
+설치 위치는 환경 변수로 지정합니다.
+
+| 변수 | 기본값 | 설명 |
+| --- | --- | --- |
+| `SOLUPROT_DIR` | `/opt/soluprot_dl/extracted/soluprot-1.0.1.0` | `soluprot.py` 가 있는 디렉터리 |
+| `SOLUPROT_PYTHON` | `/opt/soluprot_env/mamba/envs/soluprot/bin/python` | SoluProt 전용 환경의 인터프리터 |
+| `SOLUPROT_USEARCH` | `/opt/soluprot_env/tools/usearch11` | 서열 동일성 특징에 쓰는 USEARCH |
+| `SOLUPROT_CACHE` | `/opt/soluprot_env/cache/scores.sqlite3` | 서열별 점수 캐시 |
+| `SOLUPROT_PROCS` | `2` | SoluProt 에 넘기는 작업 프로세스 수 |
+| `SOLUPROT_CHUNK` | `256` | 하위 프로세스 한 번에 넘기는 서열 수 |
+| `SOLUPROT_TIMEOUT` | `1800` | 하위 프로세스 하나에 허용하는 시간(초) |
+
+운영에서는 `protein-soluprot.service` 가 위 변수를 지정해 이 서버를 띄웁니다.
 
 ```bash
-cd /opt/protein_pipeline/pipeline-mcp
-mkdir -p /opt/protein_pipeline/logs
-
-PORT=18081
-PYTHONPATH=src nohup python3 -m pipeline_mcp.soluprot_server --host 127.0.0.1 --port "$PORT" \
-  > "/opt/protein_pipeline/logs/soluprot_${PORT}.log" 2>&1 & \
-  echo $! > "/opt/protein_pipeline/logs/soluprot_${PORT}.pid"
-disown || true
-
+systemctl restart protein-soluprot.service
 curl -sS http://127.0.0.1:18081/healthz; echo
 curl -sS -X POST http://127.0.0.1:18081/score -H 'Content-Type: application/json' \
-  -d '{"sequences":[{"id":"s1","sequence":"ACDEFGHIK"}]}' ; echo
+  -d '{"sequences":[{"id":"s1","sequence":"MKVLAAGIVLGSTQWRDPLLNKACFGHIYE"}]}' ; echo
 ```
 
-중지:
-```bash
-kill "$(cat /opt/protein_pipeline/logs/soluprot_18081.pid)" 2>/dev/null || true
-rm -f /opt/protein_pipeline/logs/soluprot_18081.pid
-```
+동작상 알아 둘 점이 두 가지 있습니다. 첫째, 20 잔기 미만 서열은 SoluProt 의 적용
+범위를 벗어나므로 점수 대신 `score: null` 과 사유를 돌려줍니다. 짧은 서열이 하나라도
+섞이면 SoluProt 이 배치 전체를 거부하기 때문에 서버가 미리 걸러냅니다. 둘째, 채점에
+실패하면 추정값을 만들어 내지 않고 503 과 오류 내용을 돌려줍니다.
+
+설치가 갖추어지지 않으면 서버는 기동하지 않고 종료 코드 2 로 끝나며, `/healthz` 는
+설치 문제 목록을 함께 보고합니다.
 
 ## 보안 권장사항
 운영에서는 raw port를 외부에 직접 열지 않는 것을 권장합니다.
