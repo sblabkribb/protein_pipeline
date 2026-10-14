@@ -326,7 +326,12 @@ def fig5_depth():
         key = f"{arm}|B80"
         c = con[key]
         pts = []
+        #: 통계 분석과 같은 적격 단위만 그린다. 분모가 작은 미적격 단위를 넣으면
+        #: D 가 부풀려지고, 패널의 양수 비율과 본문의 수가 어긋난다.
+        eligible = set(c.get("units", []))
         for t, u in per.items():
+            if t not in eligible:
+                continue
             try:
                 b = {dep: u["by_depth"][dep]["by_budget"]["80"] for dep in ("18", "42")}
             except KeyError:
