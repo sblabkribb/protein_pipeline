@@ -529,12 +529,17 @@ def noteS1_threeway_distribution():
     g = lambda k: np.array([float(r[k]) for r in rows])
     labs = ["Single\n+ surrogate", "RFD3+BioEmu\npool (random)", "RFD3+BioEmu\n+ surrogate"]
     cols = [BLUE, SKY, GREEN]
+    #: 무작위 조건은 SoluProt 1.0.1.0 으로 다시 채점하지 않았다 (본문이 쓰지 않는다).
+    #: 없는 값을 메우지 않고 빈 자리로 둔다.
+    has_rand_solu = all(r["ensRandom_soluprot"].strip() for r in rows)
+    solu = [g("single_soluprot"),
+            g("ensRandom_soluprot") if has_rand_solu else np.array([]),
+            g("ensSurr_soluprot")]
     panels = [("Top-20 sequence diversity", "mean pairwise diversity",
                [g("single_div"), g("ensRandom_div"), g("ensSurr_div")]),
               ("Selected-set pLDDT", "mean pLDDT",
                [g("single_plddt"), g("ensRandom_plddt"), g("ensSurr_plddt")]),
-              ("Selected-set SoluProt", "mean SoluProt",
-               [g("single_soluprot"), g("ensRandom_soluprot"), g("ensSurr_soluprot")])]
+              ("Selected-set SoluProt", "mean SoluProt", solu)]
     fig, axes = plt.subplots(1, 3, figsize=(8.6, 3.1))
     rng = np.random.default_rng(SEED)
     for ax, (title, ylab, series) in zip(axes, panels):
