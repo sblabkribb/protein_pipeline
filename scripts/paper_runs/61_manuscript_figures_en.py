@@ -191,7 +191,9 @@ def fig2_exp2_forest():
     ax.set_yticks(range(len(rows)))
     ax.set_yticklabels([r[0] for r in rows])
     ax.set_xlabel("Difference in joint-pass candidates per target  (RF - ProteinMPNN score)")
-    ax.set_title("Experiment 2: same-budget difference\n(29 target x source units)\n"
+    #: 평가 단위 수는 결과 파일에서 읽는다. 적힌 숫자가 자료와 어긋나면 안 된다.
+    n_units = sum(len(j[f"{src}_pooled_cohorts"]["units"]) for src in ("rfd3", "bioemu"))
+    ax.set_title(f"Experiment 2: same-budget difference\n({n_units} target x source units)\n"
                  "thick = nominal 95% CI · thin = corrected (8 tests, 99.375%)",
                  fontsize=9.4, fontweight="bold")
     ax.grid(axis="x", alpha=.25, lw=.6)
@@ -334,13 +336,16 @@ def fig4_allocation():
     nb = [s[k]["mean_backbones_touched"] for k, _, _ in nm]
     ax.bar([n[1] for n in nm], nb, color=[n[2] for n in nm], width=.52)
     for i, (k, _, _) in enumerate(nm):
-        ax.text(i, nb[i] + .25, f"{nb[i]:.1f}\nmax share {s[k]['mean_max_share']*100:.0f}%",
-                ha="center", fontsize=8.0)
+        ax.text(i, nb[i] + .30, f"{nb[i]:.1f}", ha="center", va="bottom",
+                fontsize=8.6, fontweight="bold")
+        ax.text(i, nb[i] + 1.15, f"max share {s[k]['mean_max_share']*100:.0f}%",
+                ha="center", va="bottom", fontsize=7.6, color="#40566b")
     ax.axhline(10, color="#888", ls=":", lw=1.0)
     ax.text(1.45, 10.2, "available 10", fontsize=7.4, color="#666", ha="right")
     ax.set_ylim(0, 12.6)
     ax.set_ylabel("Distinct backbones touched")
-    ax.set_title("C  Spread", fontsize=10, fontweight="bold", loc="left")
+    ax.set_title("C  Spread (depth-42 cohort)", fontsize=10,
+                 fontweight="bold", loc="left")
     ax.grid(axis="y", alpha=.22, lw=.6)
 
     fig.suptitle("Experiment 3 · RFD3 confirmatory · B=80\n"

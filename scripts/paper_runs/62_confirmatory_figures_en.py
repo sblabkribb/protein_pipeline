@@ -147,8 +147,9 @@ def fig6_confirmatory_harvest():
         star = " *" if B == PB else ""
         rows.append((f"B={B}{star}  n={s['n']}", s["delta"], s["ci95"],
                      VERM if B == PB else GREY,
-                     ("includes 0" if not s["excludes_zero"] else "excludes 0")
-                     if B == PB else None))
+                     ("primary · includes 0" if not s["excludes_zero"]
+                      else "primary · excludes 0") if B == PB
+                     else ("includes 0" if not s["excludes_zero"] else "excludes 0")))
     forest(ax, rows, "G(greedy_frozen) - G(rf_only)",
            "B  Primary endpoint, 95% CI")
 
@@ -159,8 +160,11 @@ def fig6_confirmatory_harvest():
     x = np.arange(len(budgets))
     ax.bar(x - .18, nall, width=.34, color=GREY, label="all targets")
     ax.bar(x + .18, nel, width=.34, color=BLUE, label="eligible (denominator >= 5)")
+    #: 사전지정 §7.1 의 경계선이다. 자격 unit 이 16 아래면 음성 결과를 효과
+    #: 없음으로 쓰지 않기로 미리 정했다. 막대 주석과 겹치지 않게 선 아래에 둔다.
     ax.axhline(16, color=VERM, ls="--", lw=1.2)
-    ax.text(-.45, 16.8, "n=16: power 73%", fontsize=7.2, color=VERM, ha="left")
+    ax.text(-.45, 14.2, "prespecified floor n=16 (power 73%)",
+            fontsize=7.0, color=VERM, ha="left", va="top")
     for i, v in enumerate(nel):
         ax.text(i + .18, v + .5, f"{v}\n{power_at(v):.0%}", ha="center", fontsize=7.4)
     ax.set_xticks(x); ax.set_xticklabels([f"B={B}" for B in budgets])
@@ -229,8 +233,9 @@ def fig7_selection_decomposition():
         star = " *" if B == PB else ""
         rows.append((f"B={B}{star}", c["delta"], c["ci95"],
                      VERM if B == PB else GREY,
-                     ("includes 0" if not c["excludes_zero"] else "excludes 0")
-                     if B == PB else None))
+                     ("primary · includes 0" if not c["excludes_zero"]
+                      else "primary · excludes 0") if B == PB
+                     else ("includes 0" if not c["excludes_zero"] else "excludes 0")))
     forest(ax, rows, "Between - Within", "B  Primary endpoint, 95% CI")
 
     w = r["by_budget"][PB]["components"].get("Within", {})
