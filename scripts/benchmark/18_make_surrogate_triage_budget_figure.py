@@ -257,21 +257,26 @@ def make_figure(
     )
     _add_panel_label(ax_a, "A")
 
-    # Panel B: retrospective Top-5 recall (fully labeled 77-target benchmark).
+    # Panel B: retrospective Top-20 recall (fully labeled 77-target benchmark).
     # Separate from the strict five-target operating benchmark in A/C/D — here the
-    # held-out pool is fully labeled, so Top-5 recall is measurable. Values from
-    # the surrogate-family comparison (Supplementary Note 4).
+    # held-out pool is fully labeled, so recall is measurable. Top-20 is the
+    # budget-aligned primary metric (production folds Top-20); the stricter Top-5
+    # shows the same direction and is reported in the caption text. Values from
+    # the surrogate-family comparison (Supplementary Note 5).
     recall_csv = DEFAULT_RESULTS / "summary_exp1_models.csv"
     recall = {}
     if recall_csv.exists():
         mc = pd.read_csv(recall_csv)
-        mc = mc[(mc["selection"] == "kmeans") & (mc["metric"] == "top5_recall")]
+        mc = mc[(mc["selection"] == "kmeans") & (mc["metric"] == "top20_recall")]
         for _, r in mc.iterrows():
             recall[(str(r["surrogate"]), str(r["model"]))] = float(r["mean"])
     # Best surrogate per objective + random baseline
     groups = [
-        ("pLDDT", "RF",    recall.get(("plddt", "RF"), 0.131),    recall.get(("plddt", "Random"), 0.055)),
-        ("SoluProt", "Ridge", recall.get(("soluprot", "Ridge"), 0.703), recall.get(("soluprot", "Random"), 0.051)),
+        ("pLDDT", "RF",    recall.get(("plddt", "RF"), 0.419),    recall.get(("plddt", "Random"), 0.218)),
+        #: 용해성 목적함수의 최적 학습기는 SoluProt 을 공식 배포본으로 바꾸면서
+        #: Ridge 에서 RF 로 바뀌었다. 옛 점수는 아미노산 조성의 선형 함수에
+        #: 가까워 Ridge 가 유리해 보였을 뿐이다.
+        ("SoluProt", "RF", recall.get(("soluprot", "RF"), 0.594), recall.get(("soluprot", "Random"), 0.212)),
     ]
     xb = np.arange(len(groups)); wb = 0.36
     for j, (obj, surro, sval, rval) in enumerate(groups):
@@ -283,9 +288,9 @@ def make_figure(
         ax_b.text(xb[j] + wb/2, rval + 0.01, f"random\n{rval:.2f}", ha="center", va="bottom", fontsize=6.5, linespacing=0.9)
     ax_b.set_xticks(xb)
     ax_b.set_xticklabels([g[0] for g in groups])
-    ax_b.set_ylim(0, 0.9)
-    ax_b.set_ylabel("Top-5 recall")
-    ax_b.set_title("Retrospective Top-5 recall\nin fully labeled CATH pools")
+    ax_b.set_ylim(0, 1.0)
+    ax_b.set_ylabel("Top-20 recall")
+    ax_b.set_title("Retrospective Top-20 recall\nin fully labeled CATH pools")
     _add_panel_label(ax_b, "B")
 
     # Panel C: internal CV ranking signal for fitted policies.
@@ -333,8 +338,8 @@ def make_figure(
     ax_c.axhline(0, color=PALETTE["gray"], linewidth=0.8, linestyle="--")
     ax_c.set_xticks(np.arange(len(target_order)))
     ax_c.set_xticklabels(target_order, rotation=35, ha="right")
-    ax_c.set_ylabel("CV Spearman on 30 bootstrap labels")
-    ax_c.set_title("Policy selection from bootstrap labels")
+    ax_c.set_ylabel("CV Spearman on 30 seed labels")
+    ax_c.set_title("Policy selection from seed labels")
     ax_c.set_ylim(-0.24, 1.10)
     policy_handles = [
         Line2D([0], [0], marker="o", linestyle="None", markerfacecolor=colors["rf"], markeredgecolor=PALETTE["dark"], markersize=5.2, label="RF"),
@@ -425,8 +430,8 @@ def make_figure(
         )
     _add_panel_label(ax_d, "D")
 
-    fig.suptitle("Fixed-budget surrogate triage under fold-all accounting", y=0.965, fontsize=10.8, fontweight="bold")
-    fig.subplots_adjust(left=0.10, right=0.98, top=0.88, bottom=0.19)
+    fig.suptitle("Fixed-budget surrogate triage under fold-all accounting", y=0.985, fontsize=10.8, fontweight="bold")
+    fig.subplots_adjust(left=0.10, right=0.98, top=0.83, bottom=0.19)
 
     for label, ax in [("A", ax_a), ("B", ax_b), ("C", ax_c), ("D", ax_d)]:
         pos = ax.get_position()

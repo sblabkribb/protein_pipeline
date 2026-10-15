@@ -889,7 +889,7 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
             va="top",
         )
     fig.suptitle(
-        "Structural-context ablation: context-dependent candidate-pool shifts",
+        "Structural-context comparison: context-dependent candidate-pool shifts",
         fontsize=11,
         weight="bold",
     )

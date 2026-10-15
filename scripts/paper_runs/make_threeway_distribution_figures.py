@@ -54,8 +54,11 @@ def fig_n9():
                paired_from=0, paired_to=2, seed=1)
     _box_strip(ax[1], pl, labs, cols, "Selected-set pLDDT", "mean pLDDT", seed=2)
     _box_strip(ax[2], so, labs, cols, "Selected-set SoluProt", "mean SoluProt", seed=3)
+    # ratio of means (robust headline); the outlier-sensitive mean-of-per-target-ratios is NOT used
+    div_ratio = float(np.mean(div[2]) / np.mean(div[0]))
     fig.suptitle("Structural-context three-arm comparison — 9 CATH targets "
-                 "(diversity 9/9 up, 4.2x, paired Wilcoxon p=0.0039)", fontsize=11, fontweight="bold")
+                 f"(diversity 9/9 up, ~{div_ratio:.1f}×, paired Wilcoxon p=0.0039)",
+                 fontsize=11, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     for e in ("png", "pdf"):
         fig.savefig(FIG / f"fig13_structural_context_threeway_N9.{e}", dpi=200, bbox_inches="tight")
@@ -79,8 +82,8 @@ def fig_monomer():
                paired_from=0, paired_to=2, seed=1)
     _box_strip(ax[1], so, labs3, cols3, "Selected-set SoluProt", "mean SoluProt", seed=2)
     _box_strip(ax[2], pl, labs3, cols3, "pLDDT (pool = bootstrap labels)", "mean pLDDT", seed=3)
-    fig.suptitle("Structural-context three-arm comparison — 5 Solu_pipeline_benchmark monomer enzymes "
-                 "(diversity 5/5 up, 1.7x, paired Wilcoxon p=0.0625)", fontsize=10.5, fontweight="bold")
+    fig.suptitle("Structural-context three-arm comparison — 5 solubility-engineering monomer enzymes "
+                 "(diversity 5/5 up, ~1.7×, paired Wilcoxon p=0.0625)", fontsize=10.5, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.95])
     for e in ("png", "pdf"):
         fig.savefig(FIG / f"fig_solu_monomer_threeway.{e}", dpi=200, bbox_inches="tight")

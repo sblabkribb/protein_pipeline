@@ -78,11 +78,11 @@ def boot_ci(x, n=BOOT, seed=SEED):
     return float(x.mean()), float(d[int(.025 * n)]), float(d[int(.975 * n)])
 
 
-def box(ax, xy, wh, title, sub, face, edge, fs=9):
+def box(ax, xy, wh, title, sub, face, edge, fs=9, ls="solid"):
     x, y = xy
     w, h = wh
     ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.012,rounding_size=0.02",
-                                fc=face, ec=edge, lw=1.1))
+                                fc=face, ec=edge, lw=1.1, ls=ls))
     ax.text(x + w / 2, y + h * (0.62 if sub else 0.5), title, ha="center", va="center",
             fontsize=fs, fontweight="bold", color="#1b2a38")
     if sub:
@@ -98,39 +98,74 @@ def arrow(ax, a, b, color="#6b7c8c"):
 # ------------------------------------------------------------------ fig 1
 
 def fig1_workflow():
-    fig, ax = plt.subplots(figsize=(8.0, 3.14))
-    ax.set_xlim(0, 10.2); ax.set_ylim(-0.42, 4.0); ax.axis("off")
-    top = [("1. Constraints", "MSA conservation\nmotif / fixed sites"),
-           ("2. Backbone", "native + RFD3 / BioEmu"),
-           ("3. Sequences", "ProteinMPNN\nbulk generation"),
-           ("4. Solubility score", "SoluProt\npre-filter optional")]
-    bot = [("7. Portfolio", "joint-pass + diversity\n-> wet-lab"),
-           ("6. Verification", "AF2 / ColabFold\npLDDT + RMSD"),
-           ("5. Triage", "MPNN NLL or\ntarget-specific surrogate")]
+    """단계 순서를 눈으로 따라갈 수 있게 뱀 모양으로 배치한다.
+
+    이전 판은 윗줄과 아랫줄이 모두 왼쪽에서 오른쪽으로 흘렀고, 4번에서 내려오는
+    화살표가 5번이 아니라 7번에 닿았다. 그래서 그림이 '4 다음에 7' 로 읽히고
+    5·6 이 곁가지처럼 보였다. 아랫줄을 오른쪽에서 왼쪽으로 돌려 4→5→6→7 이
+    한 줄기로 이어지게 하고, 용해성 점수가 마지막 동시 통과 판정에서 다시
+    쓰이는 경로는 점선으로 따로 그린다.
+    """
+    fig, ax = plt.subplots(figsize=(8.0, 3.42))
+    ax.set_xlim(0, 10.2); ax.set_ylim(-0.52, 4.0); ax.axis("off")
     w, h = 2.30, 1.02
-    for i, (t, s) in enumerate(top):
-        x = 0.15 + i * 2.52
-        box(ax, (x, 2.60), (w, h), t, s, "#EAF1F8" if i < 3 else "#E4F3EC",
-            BLUE if i < 3 else GREEN)
+    top_y, bot_y = 2.62, 0.78
+    cx = [1.30 + i * 2.52 for i in range(4)]          # 윗줄 1~4 의 중심
+    bx = [cx[3], cx[2], cx[1]]                         # 아랫줄 5~7 (오른쪽에서 왼쪽)
+
+    top = [("1. Constraints", "MSA conservation\nmotif / fixed sites", "#EAF1F8", BLUE, "solid"),
+           ("2. Backbone", "native + RFD3 / BioEmu", "#EAF1F8", BLUE, "solid"),
+           ("3. Sequences", "ProteinMPNN\nbulk generation", "#EAF1F8", BLUE, "solid"),
+           ("4. Solubility score", "SoluProt\n(optional pre-filter)", "#E4F3EC", GREEN, "dashed")]
+    bot = [("5. Triage", "MPNN NLL or\ntarget-specific surrogate", "#EAF1F8", BLUE),
+           ("6. Verification", "AF2 / ColabFold\npLDDT + RMSD", "#EAF1F8", BLUE),
+           ("7. Portfolio", "joint-pass + diversity", "#F6EFE3", ORANGE)]
+
+    for i, (t, sub, face, edge, ls) in enumerate(top):
+        box(ax, (cx[i] - w / 2, top_y), (w, h), t, sub, face, edge, ls=ls)
         if i:
-            arrow(ax, (x - 0.20, 3.11), (x - 0.01, 3.11))
-    for i, (t, s) in enumerate(bot):
-        x = 0.15 + (2 - i) * 2.52 + 1.26
-        box(ax, (x, 0.75), (w, h), t, s, "#F6EFE3" if i == 0 else "#EAF1F8",
-            ORANGE if i == 0 else BLUE)
-    arrow(ax, (8.20, 2.58), (8.20, 1.79))
-    for i in range(2):
-        x = 0.15 + (2 - i) * 2.52 + 1.26
-        arrow(ax, (x - 0.20, 1.26), (x - 0.01, 1.26))
+            arrow(ax, (cx[i] - w / 2 - 0.21, top_y + h / 2), (cx[i] - w / 2 - 0.02, top_y + h / 2))
+    for i, (t, sub, face, edge) in enumerate(bot):
+        box(ax, (bx[i] - w / 2, bot_y), (w, h), t, sub, face, edge)
+        if i:
+            arrow(ax, (bx[i] + w / 2 + 0.21, bot_y + h / 2), (bx[i] + w / 2 + 0.02, bot_y + h / 2))
+
+    #: 4 -> 5. 두 상자가 같은 열에 있으므로 수직으로 내려온다.
+    arrow(ax, (cx[3], top_y - 0.02), (cx[3], bot_y + h + 0.02))
+
+    #: 용해성 점수는 동시 통과 판정에서 다시 쓰인다. 흐름이 아니므로 점선이다.
+    #: 두 줄 사이의 빈 띠로 지나가게 한다. 위로 휘면 3번 상자를 가로지른다.
+    ax.add_patch(FancyArrowPatch((cx[3] - 0.62, top_y - 0.02),
+                                 (bx[2] + 0.30, bot_y + h + 0.03),
+                                 arrowstyle="-|>", mutation_scale=10, lw=1.0,
+                                 ls="dashed", color=GREEN,
+                                 connectionstyle="arc3,rad=-0.12", shrinkA=0, shrinkB=0))
+    ax.text(6.05, 2.36, "score reused in the joint-pass decision",
+            fontsize=7.8, color=GREEN, ha="center", style="italic")
+
+    #: 고정 예산이 어느 단계에 걸리는지 보인다. 이 논문의 비교 대상이다.
+    y0 = bot_y - 0.20
+    ax.plot([bx[1] - w / 2, bx[0] + w / 2], [y0, y0], color="#6b7c8c", lw=1.0)
+    for xe in (bx[1] - w / 2, bx[0] + w / 2):
+        ax.plot([xe, xe], [y0, y0 + 0.09], color="#6b7c8c", lw=1.0)
+    ax.text((bx[1] + bx[0]) / 2, y0 - 0.30,
+            "fixed structure-prediction budget B", fontsize=8.4,
+            color="#3d5366", ha="center", fontweight="bold")
+
+    #: 습식 실험은 이 연구의 평가 범위 밖이다.
+    arrow(ax, (bx[2] - w / 2 - 0.02, bot_y + h / 2), (bx[2] - w / 2 - 0.42, bot_y + h / 2))
+    ax.text(bx[2] - w / 2 - 0.52, bot_y + h / 2, "wet-lab\n(outside this study)",
+            fontsize=7.8, color="#7a8a98", ha="right", va="center", linespacing=1.25)
+
     ax.text(0.15, 3.82, "RAPID is a workflow, not a single model: it links the design "
             "stages and allocates a fixed structure-prediction budget.",
             fontsize=9.5, fontweight="bold", color="#1b2a38")
-    ax.text(0.15, 0.56, va="top", s="The computational endpoint is not solubility itself but the "
-            "efficient recovery of candidates that pass both the\n"
-            "solubility-oriented and the structure-preservation conditions. In the "
-            "benchmark comparisons SoluProt was not applied as a\n"
-            "pre-filter: every selection rule ranked the same candidate pool, and "
-            "SoluProt entered only in the joint-pass decision (step 7).",
+    ax.text(0.15, 0.10, va="top", s="Steps 1-7 run in order. The computational endpoint is not "
+            "solubility itself but the efficient recovery of candidates that pass both the\n"
+            "solubility-oriented and the structure-preservation conditions. In the benchmark "
+            "comparisons SoluProt was not applied as a pre-filter\n(dashed box): every selection "
+            "rule ranked the same candidate pool, and the score entered only in the joint-pass "
+            "decision at step 7.",
             fontsize=8.2, color="#5a6b7a")
     save(fig, "fig1_workflow")
 
