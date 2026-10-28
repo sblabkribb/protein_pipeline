@@ -2214,6 +2214,116 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue(bioemu_completed)
             self.assertIn("cached", str(bioemu_completed[-1].get("detail") or ""))
 
+    def test_pipeline_bioemu_cached_reload_caps_backbones_at_max_return(
+        self,
+    ) -> None:
+        # A failed run leaves every retry sample in the bioemu cache. Reloading it
+        # re-gates all of them at once, which can accept far more than the request
+        # asked for; only max_return_structures may reach the downstream stages.
+        target_pdb = _bent_ca_backbone(0.0)
+        accepted_batch = [_bent_ca_backbone(0.10 * i) for i in range(1, 11)]
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGSY\n>hit1\nAGSY\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _BioEmuStub:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                requested_return = int(kwargs.get("max_return_sample_pdbs") or 0)
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"bioemu_cap_job_{self.calls}")
+                return {
+                    "sample_pdbs": [
+                        {"id": f"bioemu_{idx}", "pdb": pdb_text, "frame_index": idx}
+                        for idx, pdb_text in enumerate(
+                            accepted_batch[:requested_return]
+                        )
+                    ],
+                    "topology_pdb": accepted_batch[0],
+                }
+
+        with _tmpdir() as tmp:
+            bioemu = _BioEmuStub()
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                bioemu=bioemu,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGSY\n",
+                target_pdb=target_pdb,
+                dry_run=False,
+                stop_after="bioemu",
+                bioemu_use=True,
+                bioemu_sequence="AGSY",
+                bioemu_num_samples=20,
+                bioemu_max_return_structures=10,
+                bioemu_target_rmsd_cutoff=2.0,
+                bioemu_max_attempted_structures=200,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+
+            run_id = "bioemu_cached_cap"
+            runner.run(req, run_id=run_id)
+            bioemu_dir = Path(tmp) / run_id / "bioemu"
+
+            # Stand in for the cache a failed run leaves behind: far more gate-passing
+            # samples than the request asked for.
+            surplus = [
+                {
+                    "id": f"bioemu_cached_{idx}",
+                    "pdb_text": accepted_batch[idx % len(accepted_batch)],
+                    "source": "bioemu",
+                    "frame_index": idx,
+                    "debug_attempt": "batch" if idx < 10 else f"retry_{idx // 10}",
+                }
+                for idx in range(25)
+            ]
+            (bioemu_dir / "raw_samples.json").write_text(
+                json.dumps(surplus), encoding="utf-8"
+            )
+
+            calls_before = bioemu.calls
+            runner.run(req, run_id=run_id)
+
+            self.assertEqual(bioemu.calls, calls_before, "cache should be reused")
+            gate = json.loads(
+                (bioemu_dir / "target_gate_summary.json").read_text(encoding="utf-8")
+            )
+            debug = json.loads(
+                (bioemu_dir / "debug_summary.json").read_text(encoding="utf-8")
+            )
+            sample_meta = json.loads(
+                (bioemu_dir / "sample_pdbs.json").read_text(encoding="utf-8")
+            )
+
+            self.assertTrue(bool(debug.get("cache_hit")))
+            self.assertEqual(gate.get("input_count"), 25)
+            self.assertEqual(gate.get("accepted_count"), 25)
+            self.assertEqual(gate.get("returned_count"), 10)
+            self.assertTrue(bool(gate.get("truncated_to_max_return")))
+            self.assertEqual(debug.get("returned_count"), 10)
+            self.assertEqual(len(sample_meta.get("samples") or []), 10)
+            self.assertEqual(
+                len(list((bioemu_dir / "designs").glob("*.pdb"))),
+                10,
+            )
+
     def test_pipeline_bioemu_target_rmsd_gate_retries_until_requested_count_is_filled(
         self,
     ) -> None:

@@ -6089,6 +6089,9 @@ class PipelineRunner:
                             "max_attempted_structures": bioemu_max_attempted_structures,
                             "raw_count": len(raw_sample_records),
                             "final_accepted_count": accepted_count,
+                            "returned_count": min(
+                                accepted_count, bioemu_max_return_structures
+                            ),
                             "off_target_reject_count": rejected_count,
                             "target_rmsd_cutoff": bioemu_target_rmsd_cutoff,
                             "target_rmsd_gate_applied": bool(
@@ -6127,11 +6130,28 @@ class PipelineRunner:
                                 ),
                             )
                         )
+                        # The retry loop stops as soon as the gate accepts
+                        # max_return_structures, so a fresh run lands on the requested
+                        # count naturally. A cached run re-gates every sample collected
+                        # across earlier retries at once and can accept far more, so cap
+                        # it here or the whole surplus fans out through ProteinMPNN,
+                        # SoluProt and AF2.
+                        accepted_list = list(accepted_backbones or [])
+                        returned_list = accepted_list[:bioemu_max_return_structures]
                         if bioemu_target_gate_summary is not None:
+                            bioemu_target_gate_summary["max_return_structures"] = (
+                                bioemu_max_return_structures
+                            )
+                            bioemu_target_gate_summary["returned_count"] = len(
+                                returned_list
+                            )
+                            bioemu_target_gate_summary["truncated_to_max_return"] = len(
+                                returned_list
+                            ) < len(accepted_list)
                             write_json(
                                 target_gate_summary_path, bioemu_target_gate_summary
                             )
-                        bioemu_backbones = list(accepted_backbones or [])
+                        bioemu_backbones = returned_list
                         return {
                             "accepted_count": len(bioemu_backbones),
                             "off_target_reject_count": (
