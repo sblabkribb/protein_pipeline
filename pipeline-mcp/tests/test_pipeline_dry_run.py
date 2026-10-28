@@ -190,6 +190,43 @@ class TestPipelineDryRun(unittest.TestCase):
         self.assertTrue(isinstance(summary, dict) and summary.get("mask_applied"))
         self.assertEqual(summary.get("mask_mode"), "dssp_non_loop_reference")
 
+    def test_filter_backbones_by_target_rmsd_matches_renumbered_bioemu_candidate(
+        self,
+    ) -> None:
+        # BioEmu topology PDBs start at residue 0 and get renumbered from 1, while the
+        # reference keeps its native numbering (here, starting at 8). Both sides have to
+        # end up in the same frame or every backbone is compared 7 residues off.
+        renumbered: list[str] = []
+        seen: dict[int, int] = {}
+        for raw in _DSSP_REFERENCE_FRAGMENT.splitlines():
+            if not raw.startswith("ATOM"):
+                renumbered.append(raw)
+                continue
+            resseq = int(raw[22:26].strip())
+            if resseq not in seen:
+                seen[resseq] = len(seen)
+            renumbered.append(f"{raw[:22]}{seen[resseq]:>4d}{raw[26:]}")
+        candidate = "\n".join(renumbered) + "\n"
+
+        accepted, summary = _filter_backbones_by_target_rmsd(
+            [{"id": "bioemu_000", "pdb_text": candidate}],
+            reference_pdb_text=_DSSP_REFERENCE_FRAGMENT,
+            chains=["A"],
+            cutoff=2.0,
+            source="bioemu",
+        )
+
+        self.assertEqual(len(accepted or []), 1)
+        self.assertAlmostEqual(
+            float((accepted or [])[0]["target_rmsd"]),
+            0.0,
+            places=6,
+        )
+        self.assertEqual(
+            (summary or {}).get("reference_renumbered_ids"),
+            ["bioemu_000"],
+        )
+
     def test_filter_backbones_by_target_rmsd_remaps_single_chain_candidate(self) -> None:
         reference = (
             _pdb_atom(1, "CA", "ALA", "B", 1, 0.0, 0.0, 0.0, "C")

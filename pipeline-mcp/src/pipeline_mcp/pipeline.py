@@ -2369,20 +2369,21 @@ def _filter_backbones_by_target_rmsd(
     chain_list = [
         str(chain_id).strip() for chain_id in (chains or []) if str(chain_id).strip()
     ] or None
-    include_positions = None
-    mask_applied = False
-    mask_mode = "all_ca"
-    mask_residue_count = 0
-    if use_dssp_non_loop and reference_pdb_text.strip():
+    def _build_reference_frame(ref_text: str) -> tuple[Any, bool, str, int]:
+        if not (use_dssp_non_loop and ref_text.strip()):
+            return None, False, "all_ca", 0
         dssp_positions = dssp_non_loop_positions_by_chain(
-            reference_pdb_text,
+            ref_text,
             chains=chain_list,
         )
-        mask_residue_count = sum(len(v) for v in dssp_positions.values())
-        if mask_residue_count >= 2:
-            include_positions = dssp_positions
-            mask_applied = True
-            mask_mode = "dssp_non_loop_reference"
+        count = sum(len(v) for v in dssp_positions.values())
+        if count < 2:
+            return None, False, "all_ca", count
+        return dssp_positions, True, "dssp_non_loop_reference", count
+
+    include_positions, mask_applied, mask_mode, mask_residue_count = (
+        _build_reference_frame(reference_pdb_text)
+    )
     if cutoff is None or not reference_pdb_text.strip():
         return items, {
             "source": source,
@@ -2412,6 +2413,28 @@ def _filter_backbones_by_target_rmsd(
     missing_rmsd_ids: list[str] = []
     rmsd_by_id: dict[str, float] = {}
     chain_remap_by_id: dict[str, dict[str, str]] = {}
+    reference_renumbered_ids: list[str] = []
+
+    # CA matching keys on residue number, so a candidate renumbered from 1 must be
+    # compared against a reference in the same frame. References that start at any
+    # other residue number (a PDB fragment starting at 8, say) would otherwise be
+    # compared frame-shifted and reject every backbone.
+    renumbered_reference: tuple[str, Any] | None = None
+
+    def _reference_for_item(renumbered: bool) -> tuple[str, Any]:
+        nonlocal renumbered_reference
+        if not renumbered:
+            return reference_pdb_text, include_positions
+        if renumbered_reference is None:
+            ref_text = _preprocess_pdb_text(
+                reference_pdb_text,
+                chains=chain_list,
+                strip_nonpositive_resseq=False,
+                renumber_resseq_from_1=True,
+            )
+            ref_positions, _, _, _ = _build_reference_frame(ref_text)
+            renumbered_reference = (ref_text, ref_positions)
+        return renumbered_reference
 
     for item in items:
         item_id = str(item.get("id") or "").strip()
@@ -2434,11 +2457,14 @@ def _filter_backbones_by_target_rmsd(
             strip_nonpositive_resseq=bb_strip_nonpositive,
             renumber_resseq_from_1=bb_renumber,
         )
+        gate_reference_text, gate_include_positions = _reference_for_item(bb_renumber)
+        if bb_renumber and item_id:
+            reference_renumbered_ids.append(item_id)
         rmsd = ca_rmsd(
-            reference_pdb_text,
+            gate_reference_text,
             prepared_pdb_text,
             chains=chain_list,
-            include_positions=include_positions,
+            include_positions=gate_include_positions,
         )
         if not isinstance(rmsd, (int, float)):
             entry = dict(item)
@@ -2484,6 +2510,7 @@ def _filter_backbones_by_target_rmsd(
         "missing_rmsd_ids": missing_rmsd_ids,
         "rmsd_by_id": rmsd_by_id,
         "chain_remap_by_id": chain_remap_by_id,
+        "reference_renumbered_ids": reference_renumbered_ids,
     }
     return accepted, summary
 
