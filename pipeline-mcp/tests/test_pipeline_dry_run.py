@@ -33,6 +33,7 @@ from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.models import SequenceRecord
 from pipeline_mcp.pipeline import _build_backbone_source_summaries
+from pipeline_mcp.pipeline import _ca_rmsd_common_frame
 from pipeline_mcp.pipeline import _clear_stage_outputs_from
 from pipeline_mcp.pipeline import _effective_rfd3_mode
 from pipeline_mcp.pipeline import _filter_backbones_by_target_rmsd
@@ -189,6 +190,54 @@ class TestPipelineDryRun(unittest.TestCase):
         self.assertEqual(len(accepted or []), 1)
         self.assertTrue(isinstance(summary, dict) and summary.get("mask_applied"))
         self.assertEqual(summary.get("mask_mode"), "dssp_non_loop_reference")
+
+    def test_ca_rmsd_common_frame_ignores_reference_numbering_offset(self) -> None:
+        # An AF2 prediction comes back numbered from 1 while the reference keeps its
+        # native numbering (here, from 8). Matching CAs by residue number would score
+        # these 7 residues out of frame even though they are the same structure.
+        reference = _DSSP_REFERENCE_FRAGMENT
+        shifted: list[str] = []
+        seen: dict[int, int] = {}
+        for raw in reference.splitlines():
+            if not raw.startswith("ATOM"):
+                shifted.append(raw)
+                continue
+            resseq = int(raw[22:26].strip())
+            if resseq not in seen:
+                seen[resseq] = len(seen) + 1
+            shifted.append(f"{raw[:22]}{seen[resseq]:>4d}{raw[26:]}")
+        prediction = "\n".join(shifted) + "\n"
+
+        value, frame = _ca_rmsd_common_frame(reference, prediction, chains=["A"])
+        self.assertEqual(frame, "renumbered_from_1")
+        self.assertIsNotNone(value)
+        self.assertAlmostEqual(float(value or 0.0), 0.0, places=6)
+
+        # Residue-number matching on the raw inputs is what produced the bad value.
+        naive = ca_rmsd(reference, prediction, chains=["A"])
+        self.assertIsNotNone(naive)
+        self.assertGreater(float(naive or 0.0), 1.0)
+
+    def test_ca_rmsd_common_frame_keeps_native_numbering_when_counts_differ(
+        self,
+    ) -> None:
+        # A reference with crystallographic gaps has fewer residues than the
+        # prediction; renumbering both from 1 would misalign past the gap, so the
+        # native numbering (what residue-number matching is for) must be kept.
+        reference = _DSSP_REFERENCE_FRAGMENT
+        trimmed = [
+            raw
+            for raw in reference.splitlines()
+            if not raw.startswith("ATOM") or int(raw[22:26].strip()) != 12
+        ]
+        gapped_reference = "\n".join(trimmed) + "\n"
+
+        value, frame = _ca_rmsd_common_frame(
+            gapped_reference, reference, chains=["A"]
+        )
+        self.assertEqual(frame, "native_numbering")
+        self.assertIsNotNone(value)
+        self.assertAlmostEqual(float(value or 0.0), 0.0, places=6)
 
     def test_filter_backbones_by_target_rmsd_matches_renumbered_bioemu_candidate(
         self,

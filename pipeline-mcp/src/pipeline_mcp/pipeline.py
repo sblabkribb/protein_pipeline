@@ -84,6 +84,9 @@ _AF2_ALLOWED_AA = set("ACDEFGHIKLMNPQRSTVWYX")
 _AF2_PROVIDER_COLABFOLD = "colabfold"
 _AF2_PROVIDER_AF2 = "af2"
 _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE = "parent_backbone"
+# Bumping this invalidates RMSD values cached by an earlier, differently-framed
+# comparison so they are recomputed instead of read back from metrics.json.
+_CA_RMSD_FRAME_VERSION = "common_frame_v1"
 _PIPELINE_STAGE_ORDER = [
     "msa",
     "rfd3",
@@ -3608,6 +3611,83 @@ def _preprocess_pdb_text(
         renumber_resseq_from_1=renumber_resseq_from_1,
     )
     return processed
+
+
+def _residue_counts_by_chain(
+    pdb_text: str,
+    *,
+    chains: list[str] | None,
+) -> dict[str, int]:
+    chain_set = {str(c).strip() for c in (chains or []) if str(c).strip()} or None
+    counts: dict[str, int] = {}
+    for chain_id, res_list in residues_by_chain(
+        pdb_text, only_atom_records=True
+    ).items():
+        if chain_set is not None and chain_id not in chain_set:
+            continue
+        counts[chain_id] = len(res_list)
+    return counts
+
+
+def _ca_rmsd_common_frame(
+    reference_pdb_text: str,
+    mobile_pdb_text: str,
+    *,
+    chains: list[str] | None,
+    use_dssp: bool = True,
+) -> tuple[float | None, str]:
+    """CA RMSD between two structures that may not share a numbering frame.
+
+    ``ca_rmsd`` matches CA atoms by residue number, so an AF2 prediction numbered
+    from 1 scored against a reference that starts at residue 8 is silently
+    compared 7 residues out of frame and reads ~12A no matter how good the
+    prediction is. When both sides hold the same residues we renumber both from 1
+    so the comparison is positional. When they do not (a reference with
+    crystallographic gaps, say) we keep the native numbering, which is the case
+    residue-number matching exists for.
+    """
+    if not reference_pdb_text.strip() or not mobile_pdb_text.strip():
+        return None, "missing_input"
+
+    ref_counts = _residue_counts_by_chain(reference_pdb_text, chains=chains)
+    mob_counts = _residue_counts_by_chain(mobile_pdb_text, chains=chains)
+    if ref_counts and ref_counts == mob_counts:
+        reference_text = _preprocess_pdb_text(
+            reference_pdb_text,
+            chains=chains,
+            strip_nonpositive_resseq=False,
+            renumber_resseq_from_1=True,
+        )
+        mobile_text = _preprocess_pdb_text(
+            mobile_pdb_text,
+            chains=chains,
+            strip_nonpositive_resseq=False,
+            renumber_resseq_from_1=True,
+        )
+        frame = "renumbered_from_1"
+    else:
+        reference_text = reference_pdb_text
+        mobile_text = mobile_pdb_text
+        frame = "native_numbering"
+
+    include_positions = None
+    if use_dssp:
+        dssp_positions = dssp_non_loop_positions_by_chain(
+            reference_text,
+            chains=chains,
+        )
+        if sum(len(v) for v in dssp_positions.values()) >= 2:
+            include_positions = dssp_positions
+
+    value = ca_rmsd(
+        reference_text,
+        mobile_text,
+        chains=chains,
+        include_positions=include_positions,
+    )
+    return (
+        float(value) if isinstance(value, (int, float)) else None
+    ), frame
 
 
 def _strip_pdb_to_chains(
@@ -7550,6 +7630,39 @@ class PipelineRunner:
                     if af2_metrics_path.exists() and not request.force
                     else None
                 )
+                if (
+                    isinstance(af2_payload, dict)
+                    and isinstance(af2_payload.get("rmsd_ca"), (int, float))
+                    and str(af2_payload.get("rmsd_frame_version") or "")
+                    != _CA_RMSD_FRAME_VERSION
+                ):
+                    # Cached under an older frame convention. The prediction itself is
+                    # still good, so rescore the stored structure instead of paying for
+                    # another fold; only re-predict if the structure is gone.
+                    cached_ranked0_path = af2_root / "ranked_0.pdb"
+                    cached_ranked0 = (
+                        cached_ranked0_path.read_text(encoding="utf-8")
+                        if cached_ranked0_path.exists()
+                        else ""
+                    )
+                    if (
+                        cached_ranked0.strip()
+                        and wt_compare_reference_pdb_text.strip()
+                    ):
+                        try:
+                            rescored, rescored_frame = _ca_rmsd_common_frame(
+                                wt_compare_reference_pdb_text,
+                                cached_ranked0,
+                                chains=design_chains,
+                            )
+                        except Exception:
+                            rescored, rescored_frame = None, None
+                        af2_payload["rmsd_ca"] = rescored
+                        af2_payload["rmsd_frame"] = rescored_frame
+                        af2_payload["rmsd_frame_version"] = _CA_RMSD_FRAME_VERSION
+                        write_json(af2_metrics_path, af2_payload)
+                    else:
+                        af2_payload = None
                 if _should_retry_cached_wt_af2(af2_payload):
                     af2_payload = None
                     _unlink_if_exists(af2_job_path)
@@ -7663,27 +7776,26 @@ class PipelineRunner:
                                 )
                             best_plddt = rec.get("best_plddt")
                             rmsd_val = None
+                            rmsd_frame = None
                             if (
                                 isinstance(ranked0, str)
                                 and ranked0.strip()
                                 and wt_compare_reference_pdb_text.strip()
                             ):
                                 try:
-                                    dssp_positions = dssp_non_loop_positions_by_chain(
-                                        wt_compare_reference_pdb_text,
-                                        chains=design_chains,
-                                    )
-                                    rmsd_val = ca_rmsd(
+                                    rmsd_val, rmsd_frame = _ca_rmsd_common_frame(
                                         wt_compare_reference_pdb_text,
                                         ranked0,
                                         chains=design_chains,
-                                        include_positions=dssp_positions,
                                     )
                                 except Exception:
                                     rmsd_val = None
+                                    rmsd_frame = None
                             af2_payload = {
                                 "best_plddt": best_plddt,
                                 "rmsd_ca": rmsd_val,
+                                "rmsd_frame": rmsd_frame,
+                                "rmsd_frame_version": _CA_RMSD_FRAME_VERSION,
                                 "model_preset": wt_af2_model_preset,
                                 "db_preset": request.af2_db_preset,
                                 "max_template_date": request.af2_max_template_date,
@@ -11273,7 +11385,13 @@ class PipelineRunner:
                                 if parent_reference_pdb_text.strip()
                                 else ""
                             )
-                            if isinstance(metrics_payload, dict):
+                            if (
+                                isinstance(metrics_payload, dict)
+                                and str(
+                                    metrics_payload.get("rmsd_frame_version") or ""
+                                )
+                                == _CA_RMSD_FRAME_VERSION
+                            ):
                                 rmsd = _cached_rmsd_metric(
                                     metrics_payload,
                                     key="rmsd_ca",
@@ -11300,15 +11418,10 @@ class PipelineRunner:
                                         and parent_reference_pdb_text.strip()
                                     ):
                                         try:
-                                            dssp_positions = dssp_non_loop_positions_by_chain(
-                                                parent_reference_pdb_text,
-                                                chains=design_chains,
-                                            )
-                                            rmsd_val = ca_rmsd(
+                                            rmsd_val, _frame = _ca_rmsd_common_frame(
                                                 parent_reference_pdb_text,
                                                 pdb_text,
                                                 chains=design_chains,
-                                                include_positions=dssp_positions,
                                             )
                                             if isinstance(rmsd_val, (int, float)):
                                                 rmsd = float(rmsd_val)
@@ -11319,15 +11432,12 @@ class PipelineRunner:
                                         and wt_compare_reference_pdb_text.strip()
                                     ):
                                         try:
-                                            dssp_positions = dssp_non_loop_positions_by_chain(
-                                                wt_compare_reference_pdb_text,
-                                                chains=design_chains,
-                                            )
-                                            target_rmsd_val = ca_rmsd(
-                                                wt_compare_reference_pdb_text,
-                                                pdb_text,
-                                                chains=design_chains,
-                                                include_positions=dssp_positions,
+                                            target_rmsd_val, _frame = (
+                                                _ca_rmsd_common_frame(
+                                                    wt_compare_reference_pdb_text,
+                                                    pdb_text,
+                                                    chains=design_chains,
+                                                )
                                             )
                                             if isinstance(target_rmsd_val, (int, float)):
                                                 target_rmsd = float(target_rmsd_val)
@@ -11352,6 +11462,7 @@ class PipelineRunner:
                             payload["target_rmsd_reference_hash"] = (
                                 wt_compare_reference_hash or None
                             )
+                            payload["rmsd_frame_version"] = _CA_RMSD_FRAME_VERSION
                             write_json(metrics_path, payload)
                             if target_rmsd is not None:
                                 target_rmsd_scores[seq_id] = target_rmsd
