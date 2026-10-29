@@ -3613,6 +3613,27 @@ def _preprocess_pdb_text(
     return processed
 
 
+def _rmsd_frame_is_current(metrics_payload: dict[str, Any] | None) -> bool:
+    """Whether a cached metrics payload's RMSD was measured under the current
+    frame convention.
+
+    A payload carrying no RMSD has nothing to invalidate and counts as current.
+    One scored under an older convention must not be treated as a cache hit, or
+    the stage returns early and the rescoring path is never reached.
+    """
+    if not isinstance(metrics_payload, dict):
+        return True
+    scored = any(
+        isinstance(metrics_payload.get(key), (int, float))
+        for key in ("rmsd_ca", "target_rmsd_ca")
+    )
+    if not scored:
+        return True
+    return (
+        str(metrics_payload.get("rmsd_frame_version") or "") == _CA_RMSD_FRAME_VERSION
+    )
+
+
 def _residue_counts_by_chain(
     pdb_text: str,
     *,
@@ -7504,6 +7525,7 @@ class PipelineRunner:
                         in {None, request.af2_max_template_date}
                     )
                     and (cached_af2.get("provider") in {None, af2_provider})
+                    and _rmsd_frame_is_current(cached_af2)
                 )
                 cached_relax_ok = (not relax_enabled) or (
                     cached_relax is not None
@@ -7630,11 +7652,8 @@ class PipelineRunner:
                     if af2_metrics_path.exists() and not request.force
                     else None
                 )
-                if (
-                    isinstance(af2_payload, dict)
-                    and isinstance(af2_payload.get("rmsd_ca"), (int, float))
-                    and str(af2_payload.get("rmsd_frame_version") or "")
-                    != _CA_RMSD_FRAME_VERSION
+                if isinstance(af2_payload, dict) and not _rmsd_frame_is_current(
+                    af2_payload
                 ):
                     # Cached under an older frame convention. The prediction itself is
                     # still good, so rescore the stored structure instead of paying for
@@ -11385,13 +11404,9 @@ class PipelineRunner:
                                 if parent_reference_pdb_text.strip()
                                 else ""
                             )
-                            if (
-                                isinstance(metrics_payload, dict)
-                                and str(
-                                    metrics_payload.get("rmsd_frame_version") or ""
-                                )
-                                == _CA_RMSD_FRAME_VERSION
-                            ):
+                            if isinstance(
+                                metrics_payload, dict
+                            ) and _rmsd_frame_is_current(metrics_payload):
                                 rmsd = _cached_rmsd_metric(
                                     metrics_payload,
                                     key="rmsd_ca",

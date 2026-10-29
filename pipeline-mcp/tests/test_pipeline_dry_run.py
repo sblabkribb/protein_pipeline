@@ -34,6 +34,8 @@ from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.models import SequenceRecord
 from pipeline_mcp.pipeline import _build_backbone_source_summaries
 from pipeline_mcp.pipeline import _ca_rmsd_common_frame
+from pipeline_mcp.pipeline import _rmsd_frame_is_current
+from pipeline_mcp.pipeline import _CA_RMSD_FRAME_VERSION
 from pipeline_mcp.pipeline import _clear_stage_outputs_from
 from pipeline_mcp.pipeline import _effective_rfd3_mode
 from pipeline_mcp.pipeline import _filter_backbones_by_target_rmsd
@@ -190,6 +192,33 @@ class TestPipelineDryRun(unittest.TestCase):
         self.assertEqual(len(accepted or []), 1)
         self.assertTrue(isinstance(summary, dict) and summary.get("mask_applied"))
         self.assertEqual(summary.get("mask_mode"), "dssp_non_loop_reference")
+
+    def test_rmsd_frame_is_current_rejects_values_from_an_older_convention(
+        self,
+    ) -> None:
+        # Stage caches key off this: a hit here means the stage returns early and
+        # never reaches the rescoring path, so a stale value would survive.
+        self.assertFalse(
+            _rmsd_frame_is_current({"rmsd_ca": 12.63, "rmsd_frame_version": None})
+        )
+        self.assertFalse(_rmsd_frame_is_current({"rmsd_ca": 12.63}))
+        self.assertFalse(
+            _rmsd_frame_is_current(
+                {"rmsd_ca": 12.63, "rmsd_frame_version": "something_older"}
+            )
+        )
+        # target_rmsd_ca alone is still a scored payload and must be checked too.
+        self.assertFalse(_rmsd_frame_is_current({"target_rmsd_ca": 12.5}))
+
+        self.assertTrue(
+            _rmsd_frame_is_current(
+                {"rmsd_ca": 0.61, "rmsd_frame_version": _CA_RMSD_FRAME_VERSION}
+            )
+        )
+        # Nothing scored yet, so there is nothing to invalidate.
+        self.assertTrue(_rmsd_frame_is_current({"best_plddt": 94.4}))
+        self.assertTrue(_rmsd_frame_is_current({"rmsd_ca": None}))
+        self.assertTrue(_rmsd_frame_is_current(None))
 
     def test_ca_rmsd_common_frame_ignores_reference_numbering_offset(self) -> None:
         # An AF2 prediction comes back numbered from 1 while the reference keeps its
