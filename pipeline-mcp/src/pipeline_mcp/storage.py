@@ -317,6 +317,7 @@ def list_artifacts(
         return []
 
     results: list[dict[str, object]] = []
+    found: list[tuple[str, str, Path]] = []
     root = root.resolve()
     base = base.resolve()
     max_depth = max(0, int(max_depth))
@@ -338,57 +339,60 @@ def list_artifacts(
             }
         ]
 
+    # base and root are already resolved, and os.walk does not descend into symlinked
+    # directories, so every dirpath below is already absolute and symlink-free.
+    # Re-resolving each entry costs a syscall per path component and dominated this
+    # function: a run with a few thousand files spent most of a second here, on every
+    # console view switch.
     for dirpath, dirnames, filenames in os.walk(base):
-        rel_dir = Path(dirpath).resolve().relative_to(base)
+        dir_path = Path(dirpath)
+        rel_dir = dir_path.relative_to(base)
         depth = len(rel_dir.parts)
         if depth >= max_depth:
             dirnames[:] = []
         dirnames.sort()
+        rel_from_root = dir_path.relative_to(root)
         visible_filenames: list[str] = []
         for name in filenames:
-            rel = (Path(dirpath).resolve() / name).resolve().relative_to(root)
-            if _is_user_visible_artifact_path(rel):
+            if _is_user_visible_artifact_path(rel_from_root / name):
                 visible_filenames.append(name)
         filenames[:] = visible_filenames
         filenames.sort()
 
-        for name in dirnames:
-            path = Path(dirpath) / name
-            rel = path.resolve().relative_to(root)
-            stat = path.stat()
-            results.append(
-                {
-                    "path": str(rel).replace("\\", "/"),
-                    "type": "dir",
-                    "size": int(stat.st_size),
-                    "modified_at": time.strftime(
-                        "%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)
-                    ),
-                }
-            )
-        for name in filenames:
-            path = Path(dirpath) / name
-            rel = path.resolve().relative_to(root)
-            stat = path.stat()
-            results.append(
-                {
-                    "path": str(rel).replace("\\", "/"),
-                    "type": "file",
-                    "size": int(stat.st_size),
-                    "modified_at": time.strftime(
-                        "%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)
-                    ),
-                }
-            )
-    if limit and len(results) > limit:
-        indexed = list(enumerate(results))
-        indexed.sort(
-            key=lambda item: (
-                _artifact_priority(item[1].get("path") or ""),
-                item[0],
-            )
+        for entry_type, names in (("dir", dirnames), ("file", filenames)):
+            for name in names:
+                found.append(
+                    (
+                        str(rel_from_root / name).replace("\\", "/"),
+                        entry_type,
+                        dir_path / name,
+                    )
+                )
+
+    # Which entries survive the limit depends only on the path, so select first and
+    # stat only the survivors - a large run would otherwise stat a few thousand files
+    # to report two hundred.
+    if limit and len(found) > limit:
+        indexed = list(enumerate(found))
+        indexed.sort(key=lambda item: (_artifact_priority(item[1][0]), item[0]))
+        found = [entry for _, entry in indexed[:limit]]
+
+    for rel_path, entry_type, fs_path in found:
+        try:
+            stat = fs_path.stat()
+        except OSError:
+            # A run still being written can drop a file between the walk and here.
+            continue
+        results.append(
+            {
+                "path": rel_path,
+                "type": entry_type,
+                "size": int(stat.st_size),
+                "modified_at": time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)
+                ),
+            }
         )
-        return [entry for _, entry in indexed[:limit]]
 
     return results
 

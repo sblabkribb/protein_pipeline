@@ -10,6 +10,7 @@ from pathlib import Path
 from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.pipeline import PipelineRunner
 from pipeline_mcp.storage import init_run
+from pipeline_mcp.storage import list_artifacts
 from pipeline_mcp.storage import list_runs
 from pipeline_mcp.storage import set_status
 from pipeline_mcp.tools import ToolDispatcher
@@ -919,6 +920,63 @@ print("ok")
             self.assertLessEqual(len(paths), 300)
             self.assertIn("workflow_studio/session.json", paths)
             self.assertIn("wt/af2/ranked_0.pdb", paths)
+
+    def test_list_artifacts_stats_only_the_entries_it_returns(self) -> None:
+        # Selection depends only on the path, so a large run must not stat every file
+        # just to report `limit` of them. This ran on every console view switch and a
+        # few thousand files cost most of a second.
+        from pipeline_mcp import storage
+
+        with _tmpdir() as tmp:
+            run_id = "artifact_stat_budget"
+            root = init_run(tmp, run_id).root
+            for idx in range(300):
+                candidate_dir = root / "tiers" / "50" / "af2" / f"candidate_{idx:03d}"
+                candidate_dir.mkdir(parents=True, exist_ok=True)
+                (candidate_dir / "metrics.json").write_text("{}\n", encoding="utf-8")
+                (candidate_dir / "ranked_0.pdb").write_text("END\n", encoding="utf-8")
+
+            real_stat = Path.stat
+            calls = {"n": 0}
+
+            def counting_stat(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+                calls["n"] += 1
+                return real_stat(self, *args, **kwargs)
+
+            Path.stat = counting_stat
+            try:
+                listed = storage.list_artifacts(
+                    tmp, run_id, max_depth=6, limit=50
+                )
+            finally:
+                Path.stat = real_stat
+
+            self.assertEqual(len(listed), 50)
+            # One stat per returned entry; the walk itself must add no per-file stats.
+            self.assertLessEqual(
+                calls["n"],
+                60,
+                f"stat called {calls['n']} times to return 50 entries",
+            )
+
+    def test_list_artifacts_reports_paths_relative_to_the_run_root(self) -> None:
+        with _tmpdir() as tmp:
+            run_id = "artifact_relative_paths"
+            root = init_run(tmp, run_id).root
+            (root / "tiers" / "30").mkdir(parents=True, exist_ok=True)
+            (root / "tiers" / "30" / "af2_scores.json").write_text(
+                "{}\n", encoding="utf-8"
+            )
+            (root / "target.pdb").write_text("END\n", encoding="utf-8")
+
+            listed = list_artifacts(tmp, run_id, max_depth=6, limit=200)
+            paths = {str(item.get("path") or "") for item in listed}
+
+            self.assertIn("target.pdb", paths)
+            self.assertIn("tiers/30/af2_scores.json", paths)
+            for path in paths:
+                self.assertFalse(path.startswith("/"), f"{path} should be relative")
+                self.assertNotIn("..", path)
 
     def test_pipeline_save_and_get_workflow_session(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
