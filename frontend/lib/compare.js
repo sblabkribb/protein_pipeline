@@ -351,3 +351,10 @@ export function selectResidueStripMetrics(metrics, options = {}) {
   const source = significant.length ? significant.slice(0, maxCount) : items.slice(0, fallbackCount);
   return source.slice().sort(compareResidueMetricPosition);
 }
+
+/** A run that simply lacks an artifact is a normal state, not a transport fault.
+ *  Most runs have no wt/af2 outputs, so the UI should say "no data" for these
+ *  rather than surface the backend error text. */
+export function isArtifactNotFoundError(err) {
+  return /artifact not found/i.test(String(err?.message || err || ""));
+}

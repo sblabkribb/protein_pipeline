@@ -93,6 +93,7 @@ import {
   hitListRelaxColumnEnabled,
   runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
+  isArtifactNotFoundError,
 } from "./lib/compare.js?v=20260407_v6";
 import { buildCopilotReply } from "./lib/copilot.js?v=20260407_v6";
 import {
@@ -2897,6 +2898,7 @@ const I18N = {
     "artifacts.preview.compare.clear": "Clear",
     "artifacts.preview.compare.missing": "Select both left and right 3D artifacts first.",
     "artifacts.preview.compare.failed": "3D comparison failed: {error}",
+    "artifacts.preview.compare.noData": "No data. This run has no such artifact.",
     "artifacts.preview.compare.refs.title": "Resolved Baselines",
     "artifacts.preview.compare.refs.summary": "Resolved Baselines ({count}/{total})",
     "artifacts.preview.compare.refs.input": "Input Structure",
@@ -4630,6 +4632,7 @@ const I18N = {
     "artifacts.preview.compare.clear": "초기화",
     "artifacts.preview.compare.missing": "좌/우 3D 아티팩트를 모두 선택하세요.",
     "artifacts.preview.compare.failed": "3D 비교 실패: {error}",
+    "artifacts.preview.compare.noData": "데이터 없음. 이 실행에는 해당 아티팩트가 없습니다.",
     "artifacts.preview.compare.refs.title": "기준선",
     "artifacts.preview.compare.refs.summary": "기준선 ({count}/{total})",
     "artifacts.preview.compare.refs.input": "입력 구조",
@@ -25955,12 +25958,17 @@ function renderArtifactCompareSelects() {
 
   const leftPaths = new Set(structureItems.map((item) => String(item.path || "")));
   const rightPaths = leftPaths;
-  el.artifactCompareLeft.value = leftPaths.has(state.artifactCompareLeftPath)
-    ? state.artifactCompareLeftPath
-    : "";
-  el.artifactCompareRight.value = rightPaths.has(state.artifactCompareRightPath)
-    ? state.artifactCompareRightPath
-    : "";
+  // Switching runs leaves the previous run's selection in state. Clearing only the
+  // select element would leave that stale path live, and the next comparison would
+  // request an artifact this run does not have.
+  if (!leftPaths.has(state.artifactCompareLeftPath)) {
+    state.artifactCompareLeftPath = "";
+  }
+  if (!rightPaths.has(state.artifactCompareRightPath)) {
+    state.artifactCompareRightPath = "";
+  }
+  el.artifactCompareLeft.value = state.artifactCompareLeftPath;
+  el.artifactCompareRight.value = state.artifactCompareRightPath;
 }
 
 async function compareSelected3dArtifacts() {
@@ -26025,6 +26033,10 @@ async function compareSelected3dArtifacts() {
       { left: leftMeta, right: rightMeta }
     );
   } catch (err) {
+    if (isArtifactNotFoundError(err)) {
+      setComparePreviewPlaceholder("artifacts.preview.compare.noData");
+      return;
+    }
     setComparePreviewPlaceholder("artifacts.preview.compare.failed", {
       error: err.message,
     });
