@@ -3758,12 +3758,6 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .monitor-summary-top,
-  .monitor-summary-bottom,
-  .monitor-meta-grid {
-    grid-template-columns: 1fr;
-  }
-
   .monitor-summary-panel,
   .monitor-agent-panel {
     grid-column: auto;
@@ -6763,9 +6757,6 @@ textarea:focus-visible {
     width: 100%;
   }
 
-  .studio-run-panel-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 860px) {
@@ -7777,4 +7768,28 @@ textarea:focus-visible {
 .studio-run-stat #studioRunIdValue {
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+/* Responsive collapse, re-stated.
+   These selectors already had a collapse rule inside an earlier @media block,
+   but their base multi-column rule is declared several hundred lines further
+   down. A media query adds no specificity, so the later base rule won and the
+   grids stayed multi-column at every width: on a 390px screen the monitor
+   summary card rendered 54px wide and its labels wrapped one character per
+   line. Declaring the collapse after every base grid rule is what makes it
+   apply, so these belong at the end of the file.
+   Verified by computed style: the three monitor grids were 2/2/3 columns at
+   390px before this, and studio-grid stayed 2 columns through 1180px. */
+@media (max-width: 1240px) {
+  .monitor-summary-top,
+  .monitor-summary-bottom,
+  .monitor-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1180px) {
+  .studio-grid {
+    grid-template-columns: 1fr;
+  }
 }
