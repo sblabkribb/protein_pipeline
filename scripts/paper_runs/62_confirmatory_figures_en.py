@@ -198,7 +198,7 @@ def fig6_confirmatory_harvest():
     s = r["by_budget"][PB].get("primary")
     verdict = ("does not support" if (s and not s["excludes_zero"])
                else ("supports" if (s and s["delta"] > 0) else "contradicts"))
-    fig.suptitle(f"Confirmatory cohort · RFD3 · 34 targets\n"
+    fig.suptitle(f"Confirmatory cohort · RFD3 · {r['n_targets']} analysable targets\n"
                  f"Backbone allocation on top of sequence ranking: the primary "
                  f"endpoint {verdict} the hypothesis",
                  fontsize=9.8, fontweight="bold", y=1.03)
@@ -231,7 +231,11 @@ def fig7_selection_decomposition():
         if not c:
             continue
         star = " *" if B == PB else ""
-        rows.append((f"B={B}{star}", c["delta"], c["ci95"],
+        #: B=40 은 적격 표적이 한 개 더 많다. 행마다 표본 수를 적지 않으면 표본이
+        #: 다른 추정치가 한 패널에서 같은 것처럼 읽힌다.
+        nt = r["by_budget"][B].get("n_targets")
+        rows.append((f"B={B}{star}" + (f"\nn={nt}" if nt else ""),
+                     c["delta"], c["ci95"],
                      VERM if B == PB else GREY,
                      ("primary · includes 0" if not c["excludes_zero"]
                       else "primary · excludes 0") if B == PB
@@ -418,8 +422,11 @@ def fig10_stop_diagnosis():
                            (sh["share_exactly_uniform"] or 0) * 100]):
         ax.text(i, v + 2, f"{v:.0f}%", ha="center", fontsize=8.4, fontweight="bold")
     ax.set_xticks([0, 1])
-    ax.set_xticklabels(["runs that\nSTOP", "of those, f\nexactly uniform"],
-                       fontsize=8.0)
+    #: 두 막대의 분모가 다르다. 균등 비율의 분모는 종료한 런이 아니라
+    #: f 가 정의된 런이므로 막대마다 분모를 적는다.
+    ax.set_xticklabels([f"STOP\n{re_['n_stopped']}/{re_['n_runs']} runs",
+                        f"f uniform\n{round((sh['share_exactly_uniform'] or 0) * sh['n'])}/{sh['n']} runs"],
+                       fontsize=7.8)
     ax.set_ylim(0, 112); ax.set_ylabel("%")
     ax.set_title(f"B  Observed at B={re_['budget']}", fontsize=9.4,
                  fontweight="bold", loc="left")
@@ -447,9 +454,8 @@ def fig10_stop_diagnosis():
 
     lcb = e.get("guardrail_nostop_lcb95", float("nan"))
     thr = e.get("threshold", .90)
-    fig.suptitle("The STOP rule fires when the policy reaches its own optimum "
-                 "— diagnostic, not a judgement\n"
-                 f"Removing it leaves EFBC unchanged; the guardrail LCB moves to "
+    fig.suptitle("STOP-rule diagnostics and exploratory removal analysis\n"
+                 f"Removing it shows no consistent EFBC change; the guardrail LCB moves to "
                  f"{lcb:.3f} against a {thr:.2f} threshold",
                  fontsize=9.4, fontweight="bold", y=1.14)
     save(fig, "fig10_stop_rule_diagnosis")

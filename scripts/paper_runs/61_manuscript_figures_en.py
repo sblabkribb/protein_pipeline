@@ -197,7 +197,7 @@ def fig2_exp2_forest():
                  "thick = nominal 95% CI · thin = corrected (8 tests, 99.375%)",
                  fontsize=9.4, fontweight="bold")
     ax.grid(axis="x", alpha=.25, lw=.6)
-    ax.set_xlim(-6.5, 19)
+    ax.set_xlim(-6.5, 23)
     fig.tight_layout()
     save(fig, "fig2_experiment2_forest")
 
@@ -251,7 +251,7 @@ def fig3_structural_context():
     ax.set_title("B  Paired contrasts, Ensemble + surrogate\n     (n=9, target bootstrap 95% CI)",
                  fontsize=10, fontweight="bold", loc="left")
     ax.grid(axis="x", alpha=.22, lw=.6)
-    ax.set_xlim(-.17, .33)
+    ax.set_xlim(-.27, .33)
 
     # C. 부수 지표는 작게 - 차이가 없다는 것이 요점이다
     ax = fig.add_subplot(gs[1, :])
@@ -272,8 +272,8 @@ def fig3_structural_context():
     ax.grid(axis="x", alpha=.22, lw=.6)
 
     fig.suptitle("Structural context, three arms, 9 CATH targets\n"
-                 "Diversity rises over a single backbone, but the surrogate\n"
-                 "does not beat random selection within the ensemble",
+                 "Diversity rises over a single backbone, but within the ensemble the\n"
+                 "surrogate shows no clear diversity advantage over random selection",
                  fontsize=9.6, fontweight="bold", y=1.03)
     save(fig, "fig3_structural_context")
 
@@ -301,7 +301,7 @@ def fig4_allocation():
         ax.text(v + 1.2 if v >= 0 else 1.2, i, f"{v:.1f}%", va="center",
                 ha="left", fontsize=8.3)
     ax.axvline(0, color="black", lw=.9)
-    ax.set_xlim(-12, 74)
+    ax.set_xlim(-38, 74)
     ax.set_xlabel("Headroom recovery\n(equal/random 0% -> oracle 100%)")
     ax.set_title("A  Levels (descriptive)", fontsize=10, fontweight="bold", loc="left")
     ax.grid(axis="x", alpha=.22, lw=.6)
@@ -348,14 +348,27 @@ def fig4_allocation():
                  fontweight="bold", loc="left")
     ax.grid(axis="y", alpha=.22, lw=.6)
 
-    fig.suptitle("Experiment 3 · RFD3 confirmatory · B=80\n"
-                 "Adding backbone allocation on top of sequence ranking does not\n"
-                 "increase yield, and narrows the spread",
+    fig.suptitle("Initial backbone-allocation pilot · RFD3 · B=80\n"
+                 "Adding backbone allocation on top of sequence ranking shows no\n"
+                 "clear additional yield, and narrows the spread",
                  fontsize=9.6, fontweight="bold", y=1.00)
     save(fig, "fig4_allocation")
 
 
+def _v2_units():
+    j = json.loads((G / "v2_mpnn_baseline.json").read_text())["groups"]
+    return sum(len(j[f"{s}_pooled_cohorts"]["units"]) for s in ("rfd3", "bioemu"))
+
+
+def _pilot_targets():
+    j = json.loads((G / "fewshot_jointpass_transfer.json").read_text())
+    return j["transfer"]["joint_pass"]["n_targets"]
+
+
 # ------------------------------------------------------------------ fig 5
+
+ARM_LABEL = {"greedy_fill": "greedy_frozen", "greedy_thompson": "greedy_thompson"}
+
 
 def fig5_depth():
     d = json.loads((G / "depth_scaling.json").read_text())
@@ -392,10 +405,11 @@ def fig5_depth():
             ax.plot([i - .16, i + .16], [m, m], color="black", lw=2.8, zorder=4)
         ax.axhline(0, color="#888", ls="--", lw=1.0)
         ax.set_xticks([0, 1])
-        ax.set_xticklabels(["depth 18\n(concentration cap 35%)", "depth 42\n(cap 95%)"],
+        ax.set_xticklabels(["depth 18\n(per-backbone cap 14)",
+                            "depth 42\n(per-backbone cap 38)"],
                            fontsize=8.4)
         ax.set_xlim(-.35, 1.55)
-        ax.set_title(f"{arm} ({role})\n"
+        ax.set_title(f"{ARM_LABEL.get(arm, arm)} ({role})\n"
                      f"$\\Delta$ {c['delta']:+.3f} [{c['ci95'][0]:+.3f}, {c['ci95'][1]:+.3f}]"
                      f" · {sum(1 for a,b in pts if b>a)}/{len(pts)} up",
                      fontsize=9.6, fontweight="bold")
@@ -404,8 +418,8 @@ def fig5_depth():
     h = [plt.Line2D([], [], color=BLUE, lw=1.6, marker="o", ms=5, label="D increases with depth"),
          plt.Line2D([], [], color=ORANGE, lw=1.6, marker="o", ms=5, label="D decreases with depth")]
     axes[1].legend(handles=h, loc="upper right", fontsize=8, frameon=False)
-    fig.suptitle("Depth-extension pilot · RFD3 confirmatory\n"
-            f"B=80 · {len(c['per_unit_delta'])} eligible units",
+    fig.suptitle("Depth-extension pilot · RFD3\n"
+            f"B=80 · {len(con['greedy_fill|B80']['per_unit_delta'])} eligible units",
                  fontsize=9.6, fontweight="bold", y=1.04)
     fig.tight_layout()
     save(fig, "fig5_depth_scaling")
@@ -458,7 +472,8 @@ def note1_design():
              "endpoint: unique-sequence pLDDT Top-20 recall", BLUE),
             ("Primary analysis 2 · v2 multi-source triage",
              "Does it beat MPNN NLL at the same folding budget?",
-             "endpoint: joint-pass yield · 29 target x source units", GREEN)]):
+             f"endpoint: joint-pass yield · {_v2_units()} target x source units",
+             GREEN)]):
         x = .25 + i * 5.20
         ax.add_patch(FancyBboxPatch((x, .40), 4.90, 1.12,
                                     boxstyle="round,pad=0.02,rounding_size=0.03",
@@ -466,8 +481,9 @@ def note1_design():
         ax.text(x + .18, 1.22, t, fontsize=9.2, fontweight="bold", color=col)
         ax.text(x + .18, .90, q, fontsize=8.4, color="#33475a")
         ax.text(x + .18, .60, ep, fontsize=8.0, color="#6b7c8c")
-    ax.text(.25, .16, "A preliminary 11-target RFD3 pilot is reported separately in the "
-            "Supplement; the primary conclusions rest on analyses 1 and 2.",
+    ax.text(.25, .16, f"A preliminary {_pilot_targets()}-target RFD3 pilot is reported "
+            "separately in the Supplement; the primary conclusions rest on "
+            "analyses 1 and 2.",
             fontsize=7.8, color=VERM)
     save(fig, "note_fig1_design")
 
@@ -515,7 +531,7 @@ def note2_headline():
     ax.axvline(0, color="black", lw=1.0, ls="--")
     ax.set_yticks(range(len(rows))); ax.set_yticklabels([r[0] for r in rows], fontsize=8.0)
     ax.set_ylim(-.55, len(rows) - .45)
-    ax.set_xlim(-2, 14)
+    ax.set_xlim(-2, 19)
     ax.set_xlabel("Difference in joint-pass yield per target")
     ax.set_title("B  v2 multi-source comparison at B=80",
                  fontsize=9.8, fontweight="bold", loc="left")
@@ -529,8 +545,13 @@ def note2_headline():
 def note3_source_stratified():
     j = json.loads((G / "v2_mpnn_baseline.json").read_text())["groups"]
     fig, axes = plt.subplots(1, 2, figsize=(8.6, 3.3), sharey=True)
-    for ax, (src, lbl) in zip(axes, (("rfd3", "RFD3 (15 units)"),
-                                     ("bioemu", "BioEmu (14 units)"))):
+    #: 예산마다 단위 수가 다를 수 있으므로(RFD3 의 B=100 은 한 단위가 빠진다)
+    #: 범위를 자료에서 읽어 적는다.
+    def _units(src):
+        n = sorted({b["n_units"] for b in j[f"{src}_pooled_cohorts"]["by_budget"].values()})
+        return str(n[0]) if len(n) == 1 else f"{n[0]}-{n[-1]}"
+    for ax, (src, lbl) in zip(axes, (("rfd3", f"RFD3 ({_units('rfd3')} units)"),
+                                     ("bioemu", f"BioEmu ({_units('bioemu')} units)"))):
         by = j[f"{src}_pooled_cohorts"]["by_budget"]
         for off, key, col, mk, nm in ((-.13, "rf_probe-mpnn_score", BLUE, "o", "RF - MPNN score"),
                                       (+.13, "rf_probe-random", VERM, "s", "RF - random")):
