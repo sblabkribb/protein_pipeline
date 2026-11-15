@@ -82,6 +82,50 @@ class _FakeAf2:
         }
 
 
+def _pdb_9mer_displaced(amplitude: float = 10.0) -> str:
+    """A 9mer whose CA trace zig-zags away from ``_pdb_9mer`` so that no rigid
+    superposition brings it under a 2.0 A CA-RMSD."""
+    lines = []
+    residues = ["ALA", "CYS", "ASP", "GLU", "PHE", "GLY", "HIS", "ILE", "LYS"]
+    for idx, resname in enumerate(residues, start=1):
+        y = amplitude if idx % 2 == 0 else 0.0
+        lines.append(
+            f"ATOM  {idx:5d}  CA  {resname} A{idx:4d}    "
+            f"{float(idx - 1):8.3f}{y:8.3f}{0.0:8.3f}  1.00 20.00           C"
+        )
+    lines.append("END")
+    return "\n".join(lines) + "\n"
+
+
+def _pooled_source_id(seq_id: str) -> str:
+    # 풀링 경로의 전역 id 는 tier<T>_<NNNNN>_<source_id> 형태다.
+    return str(seq_id).split("_")[-1]
+
+
+class _FakeAf2WithStructures:
+    """Every candidate clears the pLDDT cutoff; the even-numbered ones fold away
+    from the parent backbone, so only an RMSD gate can reject them."""
+
+    def __init__(self) -> None:
+        self.distorted_sources: set[str] = set()
+
+    def predict(self, batch_inputs, **kwargs):
+        out = {}
+        for rec in batch_inputs:
+            source_id = _pooled_source_id(rec.id)
+            digits = "".join(ch for ch in source_id if ch.isdigit())
+            distorted = bool(digits) and int(digits) % 2 == 0
+            if distorted:
+                self.distorted_sources.add(source_id)
+            out[rec.id] = {
+                "best_plddt": 95.0,
+                "best_model": "fake",
+                "ranking_debug": {},
+                "ranked_0_pdb": (_pdb_9mer_displaced() if distorted else _pdb_9mer()),
+            }
+        return out
+
+
 def test_pipeline_request_from_args_preserves_surrogate_triage_options() -> None:
     req = pipeline_request_from_args(
         {
@@ -274,6 +318,126 @@ def test_pipeline_pooled_tier_surrogate_triage_uses_one_global_af2_budget(
     )
     assert "Pooled tiers" in report["report"]
     assert "surrogate_triage/model_comparison.svg" in report["report"]
+
+
+def test_pipeline_pooled_tier_surrogate_triage_applies_rmsd_gate(
+    tmp_path, monkeypatch
+) -> None:
+    """풀링 경로도 per-tier 와 같은 pLDDT ∧ RMSD 결합 게이트를 적용해야 한다."""
+
+    def fake_embeddings(sequences, device=None, provider=None):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(
+            len(sequences), 2
+        )
+        values[:, 1] = values[:, 1] * 0.25
+        return values
+
+    monkeypatch.setattr(pipeline, "_surrogate_triage_embeddings", fake_embeddings)
+
+    af2 = _FakeAf2WithStructures()
+    runner = PipelineRunner(
+        output_root=str(tmp_path),
+        mmseqs=_FakeMmseqs(),
+        proteinmpnn=_FakeProteinMPNN(),
+        soluprot=None,
+        af2=af2,
+    )
+    req = PipelineRequest(
+        target_fasta=">q1\nACDEFGHIK\n",
+        target_pdb=_pdb_9mer(),
+        dry_run=False,
+        conservation_tiers=[0.3],
+        num_seq_per_tier=8,
+        soluprot_cutoff=0.0,
+        rfd3_use=False,
+        bioemu_use=False,
+        surrogate_triage_enabled=True,
+        surrogate_triage_scope="pooled_tiers",
+        surrogate_triage_initial_samples=3,
+        surrogate_triage_top_k=3,
+        surrogate_triage_model="rf",
+        af2_plddt_cutoff=85.0,
+        af2_rmsd_cutoff=2.0,
+        af2_top_k=0,
+        novelty_enabled=False,
+    )
+
+    result = runner.run(req, run_id="surrogate_triage_pooled_rmsd_gate")
+    tier_dir = Path(result.output_dir) / "tiers" / "30"
+    payload = json.loads((tier_dir / "af2_scores.json").read_text())
+
+    rmsd_scores = payload["rmsd_scores"]
+    assert rmsd_scores, "pooled path must record a per-candidate CA-RMSD"
+    assert payload["rmsd_missing_ids"] != payload["candidate_ids"]
+    assert all(score >= 85.0 for score in payload["scores"].values())
+
+    failing = sorted(
+        seq_id for seq_id, value in rmsd_scores.items() if float(value) > 2.0
+    )
+    passing = sorted(
+        seq_id for seq_id, value in rmsd_scores.items() if float(value) <= 2.0
+    )
+    assert failing, "fixture must produce at least one candidate above the cutoff"
+    assert passing, "fixture must produce at least one candidate under the cutoff"
+
+    # pLDDT 만으로 고르면 failing 도 전부 뽑힌다 (이전 동작).
+    assert all(seq_id not in payload["selected_ids"] for seq_id in failing)
+    assert all(
+        float(rmsd_scores[seq_id]) <= 2.0 for seq_id in payload["selected_ids"]
+    )
+    assert set(payload["selected_ids"]) == set(passing)
+
+    assert payload["rmsd_reference_mode"] == "parent_backbone"
+    assert payload["rmsd_cutoff"] == 2.0
+
+
+def test_pipeline_pooled_tier_surrogate_triage_rmsd_gate_off_when_cutoff_zero(
+    tmp_path, monkeypatch
+) -> None:
+    """af2_rmsd_cutoff <= 0 이면 per-tier 와 같이 RMSD 게이트를 끈다."""
+
+    def fake_embeddings(sequences, device=None, provider=None):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(
+            len(sequences), 2
+        )
+        values[:, 1] = values[:, 1] * 0.25
+        return values
+
+    monkeypatch.setattr(pipeline, "_surrogate_triage_embeddings", fake_embeddings)
+
+    runner = PipelineRunner(
+        output_root=str(tmp_path),
+        mmseqs=_FakeMmseqs(),
+        proteinmpnn=_FakeProteinMPNN(),
+        soluprot=None,
+        af2=_FakeAf2WithStructures(),
+    )
+    req = PipelineRequest(
+        target_fasta=">q1\nACDEFGHIK\n",
+        target_pdb=_pdb_9mer(),
+        dry_run=False,
+        conservation_tiers=[0.3],
+        num_seq_per_tier=8,
+        soluprot_cutoff=0.0,
+        rfd3_use=False,
+        bioemu_use=False,
+        surrogate_triage_enabled=True,
+        surrogate_triage_scope="pooled_tiers",
+        surrogate_triage_initial_samples=3,
+        surrogate_triage_top_k=3,
+        surrogate_triage_model="rf",
+        af2_plddt_cutoff=85.0,
+        af2_rmsd_cutoff=0.0,
+        af2_top_k=0,
+        novelty_enabled=False,
+    )
+
+    result = runner.run(req, run_id="surrogate_triage_pooled_rmsd_gate_off")
+    tier_dir = Path(result.output_dir) / "tiers" / "30"
+    payload = json.loads((tier_dir / "af2_scores.json").read_text())
+
+    assert payload["rmsd_scores"], "RMSD 는 게이트가 꺼져도 계속 기록한다"
+    assert set(payload["selected_ids"]) == set(payload["scores"])
 
 
 def test_pipeline_surrogate_triage_rank_mean_for_multiple_models(

@@ -3711,6 +3711,117 @@ def _ca_rmsd_common_frame(
     ), frame
 
 
+def _af2_candidate_rmsd_metrics(
+    candidate_ids: list[str],
+    *,
+    af2_dir: Path,
+    af2_result: dict[str, object] | None,
+    candidate_records_by_id: dict[str, SequenceRecord],
+    backbone_pdb_by_id: dict[str, str],
+    fallback_pdb_text: str,
+    design_chains: list[str] | None,
+    wt_compare_reference_pdb_text: str,
+    wt_compare_reference_hash: str,
+    plddt_scores: dict[str, float],
+) -> tuple[dict[str, float], dict[str, float], list[str]]:
+    """Score every AF2 candidate against its parent backbone and persist the
+    result into that candidate's ``metrics.json``.
+
+    Shared by the per-tier AF2 stage and the pooled-tier surrogate triage stage
+    so both apply the same CA-RMSD definition, the same cache validation and the
+    same "no RMSD means the candidate is missing, not passing" convention.
+    Returns ``(rmsd_scores, target_rmsd_scores, rmsd_missing_ids)``; a candidate
+    whose RMSD could not be computed appears only in ``rmsd_missing_ids``.
+    """
+    rmsd_scores: dict[str, float] = {}
+    target_rmsd_scores: dict[str, float] = {}
+    rmsd_missing: list[str] = []
+    for seq_id in candidate_ids:
+        rmsd = None
+        target_rmsd = None
+        seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
+        metrics_path = seq_dir / "metrics.json"
+        metrics_payload: dict[str, object] | None = None
+        if metrics_path.exists():
+            try:
+                metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+            except Exception:
+                metrics_payload = None
+        parent_backbone_id, parent_reference_pdb_text = _af2_candidate_parent_backbone(
+            seq_id,
+            candidate_records_by_id=candidate_records_by_id,
+            backbone_pdb_by_id=backbone_pdb_by_id,
+            fallback_pdb_text=fallback_pdb_text,
+        )
+        parent_reference_hash = (
+            _sha256_text(parent_reference_pdb_text)
+            if parent_reference_pdb_text.strip()
+            else ""
+        )
+        if isinstance(metrics_payload, dict) and _rmsd_frame_is_current(metrics_payload):
+            rmsd = _cached_rmsd_metric(
+                metrics_payload,
+                key="rmsd_ca",
+                expected_reference_hash=parent_reference_hash,
+                reference_hash_key="rmsd_reference_hash",
+                expected_reference_mode=_AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
+                expected_backbone_id=parent_backbone_id,
+            )
+            target_rmsd = _cached_rmsd_metric(
+                metrics_payload,
+                key="target_rmsd_ca",
+                expected_reference_hash=wt_compare_reference_hash,
+                reference_hash_key="target_rmsd_reference_hash",
+            )
+        if rmsd is None or target_rmsd is None:
+            pdb_text = _extract_predicted_pdb_text(
+                seq_id,
+                af2_result=af2_result,
+                af2_dir=af2_dir,
+            )
+            if pdb_text:
+                if rmsd is None and parent_reference_pdb_text.strip():
+                    try:
+                        rmsd_val, _frame = _ca_rmsd_common_frame(
+                            parent_reference_pdb_text,
+                            pdb_text,
+                            chains=design_chains,
+                        )
+                        if isinstance(rmsd_val, (int, float)):
+                            rmsd = float(rmsd_val)
+                    except Exception:
+                        pass
+                if target_rmsd is None and wt_compare_reference_pdb_text.strip():
+                    try:
+                        target_rmsd_val, _frame = _ca_rmsd_common_frame(
+                            wt_compare_reference_pdb_text,
+                            pdb_text,
+                            chains=design_chains,
+                        )
+                        if isinstance(target_rmsd_val, (int, float)):
+                            target_rmsd = float(target_rmsd_val)
+                    except Exception:
+                        pass
+        payload = metrics_payload if isinstance(metrics_payload, dict) else {}
+        if "best_plddt" not in payload and seq_id in plddt_scores:
+            payload["best_plddt"] = plddt_scores[seq_id]
+        payload["rmsd_ca"] = rmsd
+        payload["rmsd_reference_mode"] = _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE
+        payload["rmsd_reference_backbone_id"] = parent_backbone_id
+        payload["rmsd_reference_hash"] = parent_reference_hash or None
+        payload["target_rmsd_ca"] = target_rmsd
+        payload["target_rmsd_reference_hash"] = wt_compare_reference_hash or None
+        payload["rmsd_frame_version"] = _CA_RMSD_FRAME_VERSION
+        write_json(metrics_path, payload)
+        if target_rmsd is not None:
+            target_rmsd_scores[seq_id] = target_rmsd
+        if rmsd is None:
+            rmsd_missing.append(seq_id)
+            continue
+        rmsd_scores[seq_id] = rmsd
+    return rmsd_scores, target_rmsd_scores, rmsd_missing
+
+
 def _strip_pdb_to_chains(
     pdb_text: str,
     *,
@@ -9416,6 +9527,14 @@ class PipelineRunner:
 
                 selected_ids_by_tier: dict[str, list[str]] = {}
                 novelty_by_tier: dict[str, str] = {}
+                pooled_wt_compare_reference_hash = (
+                    _sha256_text(wt_compare_reference_pdb_text)
+                    if wt_compare_reference_pdb_text.strip()
+                    else ""
+                )
+                pooled_rmsd_cutoff: float | None = float(request.af2_rmsd_cutoff)
+                if pooled_rmsd_cutoff <= 0.0:
+                    pooled_rmsd_cutoff = None
                 for ctx in contexts:
                     tier_str_local = str(ctx["tier_str"])
                     tier_dir_local = Path(ctx["tier_dir"])
@@ -9435,10 +9554,41 @@ class PipelineRunner:
                         for global_id in tier_global_ids
                         if global_id in cached_scores and global_id in pool_meta
                     }
+                    # 풀링 경로도 per-tier 와 같은 결합 게이트를 쓴다: pLDDT 만으로
+                    # 자르면 구조가 무너진 설계가 Top-K 에 그대로 들어온다.
+                    tier_records_by_id = {
+                        str(rec.id): rec for rec in tier_records if str(rec.id).strip()
+                    }
+                    tier_af2_result: dict[str, object] = {
+                        str(pool_meta[global_id]["source_id"]): af2_result[global_id]
+                        for global_id in tier_global_ids
+                        if global_id in af2_result and global_id in pool_meta
+                    }
+                    tier_rmsd_scores, tier_target_rmsd_scores, tier_rmsd_missing = (
+                        _af2_candidate_rmsd_metrics(
+                            [str(rec.id) for rec in tier_records],
+                            af2_dir=tier_af2_dir,
+                            af2_result=tier_af2_result,
+                            candidate_records_by_id=tier_records_by_id,
+                            backbone_pdb_by_id=backbone_pdb_by_id,
+                            fallback_pdb_text=target_pdb_text,
+                            design_chains=design_chains,
+                            wt_compare_reference_pdb_text=wt_compare_reference_pdb_text,
+                            wt_compare_reference_hash=pooled_wt_compare_reference_hash,
+                            plddt_scores=tier_scores,
+                        )
+                    )
                     selected_pairs = [
                         (seq_id, score)
                         for seq_id, score in tier_scores.items()
                         if score >= float(request.af2_plddt_cutoff)
+                        and (
+                            pooled_rmsd_cutoff is None
+                            or (
+                                seq_id in tier_rmsd_scores
+                                and tier_rmsd_scores[seq_id] <= pooled_rmsd_cutoff
+                            )
+                        )
                     ]
                     selected_pairs.sort(key=lambda item: item[1], reverse=True)
                     af2_top_k = int(request.af2_top_k)
@@ -9487,8 +9637,8 @@ class PipelineRunner:
                         tier_dir_local / "af2_scores.json",
                         {
                             "scores": tier_scores,
-                            "rmsd_scores": {},
-                            "target_rmsd_scores": {},
+                            "rmsd_scores": tier_rmsd_scores,
+                            "target_rmsd_scores": tier_target_rmsd_scores,
                             "rmsd_reference_mode": _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
                             "candidate_ids": [rec.id for rec in tier_records],
                             "candidate_count_before_budget": len(ctx.get("passed") or []),
@@ -9501,7 +9651,7 @@ class PipelineRunner:
                             ),
                             "cutoff": request.af2_plddt_cutoff,
                             "rmsd_cutoff": request.af2_rmsd_cutoff,
-                            "rmsd_missing_ids": [rec.id for rec in tier_records],
+                            "rmsd_missing_ids": tier_rmsd_missing,
                             "failed_ids": sorted(partial_prediction_errors.keys()),
                             "prediction_errors": partial_prediction_errors,
                             "top_k": request.af2_top_k,
@@ -11372,119 +11522,23 @@ class PipelineRunner:
                             for seq_id in candidate_ids
                             if seq_id in cached_scores
                         }
-                        rmsd_scores: dict[str, float] = {}
-                        target_rmsd_scores: dict[str, float] = {}
-                        rmsd_missing: list[str] = []
                         rmsd_cutoff = float(request.af2_rmsd_cutoff)
                         if rmsd_cutoff <= 0.0:
                             rmsd_cutoff = None
-                        for seq_id in candidate_ids:
-                            rmsd = None
-                            target_rmsd = None
-                            seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
-                            metrics_path = seq_dir / "metrics.json"
-                            metrics_payload: dict[str, object] | None = None
-                            if metrics_path.exists():
-                                try:
-                                    metrics_payload = json.loads(
-                                        metrics_path.read_text(encoding="utf-8")
-                                    )
-                                except Exception:
-                                    metrics_payload = None
-                            parent_backbone_id, parent_reference_pdb_text = (
-                                _af2_candidate_parent_backbone(
-                                    seq_id,
-                                    candidate_records_by_id=candidate_records_by_id,
-                                    backbone_pdb_by_id=backbone_pdb_by_id,
-                                    fallback_pdb_text=target_pdb_text,
-                                )
+                        rmsd_scores, target_rmsd_scores, rmsd_missing = (
+                            _af2_candidate_rmsd_metrics(
+                                candidate_ids,
+                                af2_dir=af2_dir,
+                                af2_result=af2_result,
+                                candidate_records_by_id=candidate_records_by_id,
+                                backbone_pdb_by_id=backbone_pdb_by_id,
+                                fallback_pdb_text=target_pdb_text,
+                                design_chains=design_chains,
+                                wt_compare_reference_pdb_text=wt_compare_reference_pdb_text,
+                                wt_compare_reference_hash=wt_compare_reference_hash,
+                                plddt_scores=cached_scores,
                             )
-                            parent_reference_hash = (
-                                _sha256_text(parent_reference_pdb_text)
-                                if parent_reference_pdb_text.strip()
-                                else ""
-                            )
-                            if isinstance(
-                                metrics_payload, dict
-                            ) and _rmsd_frame_is_current(metrics_payload):
-                                rmsd = _cached_rmsd_metric(
-                                    metrics_payload,
-                                    key="rmsd_ca",
-                                    expected_reference_hash=parent_reference_hash,
-                                    reference_hash_key="rmsd_reference_hash",
-                                    expected_reference_mode=_AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
-                                    expected_backbone_id=parent_backbone_id,
-                                )
-                                target_rmsd = _cached_rmsd_metric(
-                                    metrics_payload,
-                                    key="target_rmsd_ca",
-                                    expected_reference_hash=wt_compare_reference_hash,
-                                    reference_hash_key="target_rmsd_reference_hash",
-                                )
-                            if rmsd is None or target_rmsd is None:
-                                pdb_text = _extract_predicted_pdb_text(
-                                    seq_id,
-                                    af2_result=af2_result,
-                                    af2_dir=af2_dir,
-                                )
-                                if pdb_text:
-                                    if (
-                                        rmsd is None
-                                        and parent_reference_pdb_text.strip()
-                                    ):
-                                        try:
-                                            rmsd_val, _frame = _ca_rmsd_common_frame(
-                                                parent_reference_pdb_text,
-                                                pdb_text,
-                                                chains=design_chains,
-                                            )
-                                            if isinstance(rmsd_val, (int, float)):
-                                                rmsd = float(rmsd_val)
-                                        except Exception:
-                                            pass
-                                    if (
-                                        target_rmsd is None
-                                        and wt_compare_reference_pdb_text.strip()
-                                    ):
-                                        try:
-                                            target_rmsd_val, _frame = (
-                                                _ca_rmsd_common_frame(
-                                                    wt_compare_reference_pdb_text,
-                                                    pdb_text,
-                                                    chains=design_chains,
-                                                )
-                                            )
-                                            if isinstance(target_rmsd_val, (int, float)):
-                                                target_rmsd = float(target_rmsd_val)
-                                        except Exception:
-                                            pass
-                            payload = (
-                                metrics_payload
-                                if isinstance(metrics_payload, dict)
-                                else {}
-                            )
-                            if "best_plddt" not in payload and seq_id in cached_scores:
-                                payload["best_plddt"] = cached_scores[seq_id]
-                            payload["rmsd_ca"] = rmsd
-                            payload["rmsd_reference_mode"] = (
-                                _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE
-                            )
-                            payload["rmsd_reference_backbone_id"] = parent_backbone_id
-                            payload["rmsd_reference_hash"] = (
-                                parent_reference_hash or None
-                            )
-                            payload["target_rmsd_ca"] = target_rmsd
-                            payload["target_rmsd_reference_hash"] = (
-                                wt_compare_reference_hash or None
-                            )
-                            payload["rmsd_frame_version"] = _CA_RMSD_FRAME_VERSION
-                            write_json(metrics_path, payload)
-                            if target_rmsd is not None:
-                                target_rmsd_scores[seq_id] = target_rmsd
-                            if rmsd is None:
-                                rmsd_missing.append(seq_id)
-                                continue
-                            rmsd_scores[seq_id] = rmsd
+                        )
                         selected_pairs = [
                             (seq_id, score)
                             for seq_id, score in candidate_scores.items()
