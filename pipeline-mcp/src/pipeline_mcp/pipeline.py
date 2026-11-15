@@ -13257,6 +13257,13 @@ class PipelineRunner:
                 },
                 "request_hash": expected_request_hash,
                 "input_hash": expected_input_hash,
+                # The seed the worker was actually given. `request.seed` of 0 means
+                # "draw one", so without this a default run cannot be replayed.
+                # Deliberately NOT part of request/input_hash: it changes every run
+                # and would stop any cached ProteinMPNN result from ever being reused.
+                "effective_seed": (
+                    raw.get("effective_seed") if isinstance(raw, dict) else None
+                ),
                 "native": native.__dict__,
                 "samples": [s.__dict__ for s in samples],
                 "fixed_positions": expected_fixed_positions,

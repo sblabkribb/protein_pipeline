@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 import os
+import secrets
 from typing import Any
 from collections.abc import Callable
 
@@ -13,6 +14,28 @@ from ..models import SequenceRecord
 
 def _b64encode_text(text: str) -> str:
     return base64.b64encode(text.encode("utf-8")).decode("ascii")
+
+
+# ProteinMPNN reads seed 0 as "draw a random seed yourself" and never reports the
+# value it drew, so a run launched with the default seed cannot be replayed.
+_SEED_SENTINEL = 0
+
+
+def _resolve_seed(seed: int) -> int:
+    """Turn ProteinMPNN's "0 means random" sentinel into a concrete seed.
+
+    This does NOT make runs deterministic: with the default seed every run still
+    draws a different value, which is what a design pipeline should do. It makes
+    the value one the caller can record and replay afterwards.
+
+    It also keeps the chunk arithmetic honest. ``_design_chunked`` offsets the
+    seed per chunk, and adding an offset to the sentinel silently turns "random"
+    into a fixed seed for every chunk after the first.
+    """
+    value = int(seed)
+    if value != _SEED_SENTINEL:
+        return value
+    return secrets.randbelow(2**31 - 1) + 1
 
 
 def _env_int(name: str, default: int) -> int:
@@ -51,9 +74,10 @@ class ProteinMPNNClient:
         on_job_id: Callable[[str], None] | None = None,
     ) -> tuple[SequenceRecord, list[SequenceRecord], dict[str, Any]]:
         total_requested = int(num_seq_per_target)
+        effective_seed = _resolve_seed(seed)
         max_per_job = _env_int("PROTEINMPNN_MAX_SEQS_PER_JOB", 500)
         if total_requested > max_per_job:
-            return self._design_chunked(
+            native, samples, raw = self._design_chunked(
                 pdb_text=pdb_text,
                 pdb_name=pdb_name,
                 pdb_path_chains=pdb_path_chains,
@@ -64,10 +88,11 @@ class ProteinMPNNClient:
                 max_seq_per_job=max_per_job,
                 batch_size=batch_size,
                 sampling_temp=sampling_temp,
-                seed=seed,
+                seed=effective_seed,
                 backbone_noise=backbone_noise,
                 on_job_id=on_job_id,
             )
+            return native, samples, self._with_seed_record(raw, seed, effective_seed)
 
         payload: dict[str, Any] = {
             "pdb_base64": _b64encode_text(pdb_text),
@@ -77,7 +102,7 @@ class ProteinMPNNClient:
             "num_seq_per_target": int(num_seq_per_target),
             "batch_size": int(batch_size),
             "sampling_temp": float(sampling_temp),
-            "seed": int(seed),
+            "seed": int(effective_seed),
             "backbone_noise": float(backbone_noise),
             "cleanup": True,
         }
@@ -87,7 +112,18 @@ class ProteinMPNNClient:
             payload["fixed_positions"] = fixed_positions
 
         result = self._run_payload(payload, on_job_id=on_job_id)
-        return self._parse_result(result)
+        native, samples, raw = self._parse_result(result)
+        return native, samples, self._with_seed_record(raw, seed, effective_seed)
+
+    @staticmethod
+    def _with_seed_record(
+        raw: dict[str, Any], requested_seed: int, effective_seed: int
+    ) -> dict[str, Any]:
+        """Record the seed the worker was actually given, next to the one asked for."""
+        out = dict(raw) if isinstance(raw, dict) else {"result": raw}
+        out["requested_seed"] = int(requested_seed)
+        out["effective_seed"] = int(effective_seed)
+        return out
 
     def _design_chunked(
         self,
@@ -114,7 +150,14 @@ class ProteinMPNNClient:
         while remaining > 0:
             chunk_index += 1
             chunk_size = min(int(max_seq_per_job), remaining)
-            chunk_seed = int(seed) + chunk_index - 1
+            # The sentinel must not be offset: 0 + 1 would ask the worker for a
+            # FIXED seed of 1 on the second chunk while the first stayed random.
+            # design() resolves it before calling here; this guards a direct call.
+            chunk_seed = (
+                _SEED_SENTINEL
+                if int(seed) == _SEED_SENTINEL
+                else int(seed) + chunk_index - 1
+            )
             payload: dict[str, Any] = {
                 "pdb_base64": _b64encode_text(pdb_text),
                 "pdb_name": pdb_name,
