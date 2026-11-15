@@ -58,7 +58,8 @@ jobs:
             pipeline-mcp/tests/test_runpod_admin.py \
             pipeline-mcp/tests/test_plan_council.py \
             pipeline-mcp/tests/test_council_skills.py \
-            pipeline-mcp/tests/test_literature.py
+            pipeline-mcp/tests/test_literature.py \
+            pipeline-mcp/tests/test_surrogate_triage.py
 
       - name: Run frontend deployment checks
         run: |
