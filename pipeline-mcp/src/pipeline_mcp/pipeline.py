@@ -3739,7 +3739,14 @@ def _af2_candidate_rmsd_metrics(
     for seq_id in candidate_ids:
         rmsd = None
         target_rmsd = None
-        seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
+        try:
+            seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
+        except OSError:
+            # 후보 디렉터리를 못 쓰면 그 후보만 "RMSD 없음"으로 처리한다. 풀링
+            # 경로에는 per-tier 와 달리 auto_recover 안전망이 없어서, 여기서
+            # 예외가 올라가면 실행 전체가 날아간다.
+            rmsd_missing.append(seq_id)
+            continue
         metrics_path = seq_dir / "metrics.json"
         metrics_payload: dict[str, object] | None = None
         if metrics_path.exists():
@@ -3774,11 +3781,15 @@ def _af2_candidate_rmsd_metrics(
                 reference_hash_key="target_rmsd_reference_hash",
             )
         if rmsd is None or target_rmsd is None:
-            pdb_text = _extract_predicted_pdb_text(
-                seq_id,
-                af2_result=af2_result,
-                af2_dir=af2_dir,
-            )
+            try:
+                pdb_text = _extract_predicted_pdb_text(
+                    seq_id,
+                    af2_result=af2_result,
+                    af2_dir=af2_dir,
+                )
+            except Exception:
+                # 잘리거나 깨진 ranked_0.pdb 하나가 실행을 끝내면 안 된다.
+                pdb_text = ""
             if pdb_text:
                 if rmsd is None and parent_reference_pdb_text.strip():
                     try:
@@ -3812,7 +3823,12 @@ def _af2_candidate_rmsd_metrics(
         payload["target_rmsd_ca"] = target_rmsd
         payload["target_rmsd_reference_hash"] = wt_compare_reference_hash or None
         payload["rmsd_frame_version"] = _CA_RMSD_FRAME_VERSION
-        write_json(metrics_path, payload)
+        try:
+            write_json(metrics_path, payload)
+        except OSError:
+            # metrics.json 기록은 best effort 다. 계산된 값은 그대로 반환해
+            # 게이트에 쓴다.
+            pass
         if target_rmsd is not None:
             target_rmsd_scores[seq_id] = target_rmsd
         if rmsd is None:
