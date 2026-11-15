@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 # 이 스위트는 liability 게이트 이전 설계 수를 고정한다. 게이트 동작 자체는
 # test_pipeline_liability_gate.py 가 검증한다.
@@ -100,6 +101,31 @@ def _pdb_9mer_displaced(amplitude: float = 10.0) -> str:
 def _pooled_source_id(seq_id: str) -> str:
     # 풀링 경로의 전역 id 는 tier<T>_<NNNNN>_<source_id> 형태다.
     return str(seq_id).split("_")[-1]
+
+
+class _FakeAf2DistortedRankHighest:
+    """Like ``_FakeAf2WithStructures`` but the candidates that FAIL the RMSD gate
+    carry the HIGHEST pLDDT.
+
+    This is what separates "gate, then truncate to af2_top_k" from "truncate,
+    then gate": with the former the surviving pick is the best *passing*
+    candidate, with the latter the top-K is filled by the distorted ones and the
+    selection collapses to nothing.
+    """
+
+    def predict(self, batch_inputs, **kwargs):
+        out = {}
+        for rec in batch_inputs:
+            source_id = _pooled_source_id(rec.id)
+            digits = "".join(ch for ch in source_id if ch.isdigit())
+            distorted = bool(digits) and int(digits) % 2 == 0
+            out[rec.id] = {
+                "best_plddt": 99.0 if distorted else 90.0,
+                "best_model": "fake",
+                "ranking_debug": {},
+                "ranked_0_pdb": (_pdb_9mer_displaced() if distorted else _pdb_9mer()),
+            }
+        return out
 
 
 class _FakeAf2WithStructures:
@@ -389,6 +415,83 @@ def test_pipeline_pooled_tier_surrogate_triage_applies_rmsd_gate(
 
     assert payload["rmsd_reference_mode"] == "parent_backbone"
     assert payload["rmsd_cutoff"] == 2.0
+
+    # 계산한 RMSD 가 후보별 metrics.json 에도 실제로 남아야 한다.
+    for seq_id, value in rmsd_scores.items():
+        metrics_path = tier_dir / "af2" / pipeline._safe_id(seq_id) / "metrics.json"
+        assert metrics_path.exists(), f"{seq_id} has no metrics.json"
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+        assert metrics["rmsd_reference_mode"] == "parent_backbone"
+        assert metrics["rmsd_reference_backbone_id"]
+        assert float(metrics["rmsd_ca"]) == pytest.approx(float(value))
+
+
+def test_pipeline_pooled_tier_surrogate_triage_gates_before_top_k_truncation(
+    tmp_path, monkeypatch
+) -> None:
+    """게이트가 af2_top_k 자르기보다 **먼저** 와야 한다.
+
+    실패하는 후보들이 pLDDT 가 가장 높게 나오도록 해 두었으므로, 순서가 뒤집혀
+    있으면 상위 K 가 그 후보들로 채워졌다가 전부 걸러져 선택이 비어 버린다.
+    """
+
+    def fake_embeddings(sequences, device=None, provider=None):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(
+            len(sequences), 2
+        )
+        values[:, 1] = values[:, 1] * 0.25
+        return values
+
+    monkeypatch.setattr(pipeline, "_surrogate_triage_embeddings", fake_embeddings)
+
+    runner = PipelineRunner(
+        output_root=str(tmp_path),
+        mmseqs=_FakeMmseqs(),
+        proteinmpnn=_FakeProteinMPNN(),
+        soluprot=None,
+        af2=_FakeAf2DistortedRankHighest(),
+    )
+    req = PipelineRequest(
+        target_fasta=">q1\nACDEFGHIK\n",
+        target_pdb=_pdb_9mer(),
+        dry_run=False,
+        conservation_tiers=[0.3],
+        num_seq_per_tier=8,
+        soluprot_cutoff=0.0,
+        rfd3_use=False,
+        bioemu_use=False,
+        surrogate_triage_enabled=True,
+        surrogate_triage_scope="pooled_tiers",
+        surrogate_triage_initial_samples=3,
+        surrogate_triage_top_k=3,
+        surrogate_triage_model="rf",
+        af2_plddt_cutoff=85.0,
+        af2_rmsd_cutoff=2.0,
+        af2_top_k=1,
+        novelty_enabled=False,
+    )
+
+    result = runner.run(req, run_id="surrogate_triage_pooled_gate_before_topk")
+    tier_dir = Path(result.output_dir) / "tiers" / "30"
+    payload = json.loads((tier_dir / "af2_scores.json").read_text())
+
+    rmsd_scores = payload["rmsd_scores"]
+    passing = [
+        seq_id for seq_id, value in rmsd_scores.items() if float(value) <= 2.0
+    ]
+    failing = [
+        seq_id for seq_id, value in rmsd_scores.items() if float(value) > 2.0
+    ]
+    assert passing, "fixture must leave at least one candidate under the cutoff"
+    assert failing, "fixture must produce at least one candidate above the cutoff"
+    # 실패 후보가 더 높은 pLDDT 를 들고 있어야 이 테스트가 구분력을 갖는다.
+    assert max(float(payload["scores"][s]) for s in failing) > max(
+        float(payload["scores"][s]) for s in passing
+    )
+
+    selected = payload["selected_ids"]
+    assert len(selected) == 1, f"af2_top_k=1 must leave one candidate, got {selected}"
+    assert selected[0] in passing
 
 
 def test_pipeline_pooled_tier_surrogate_triage_rmsd_gate_off_when_cutoff_zero(
